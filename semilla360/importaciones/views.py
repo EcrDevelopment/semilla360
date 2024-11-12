@@ -40,40 +40,53 @@ def extract_pdf_tables(file):
 
             print(text)
             lines = text.splitlines()  # Dividir el texto en líneas
+
             data = []
             header_found = False
 
             # Encabezado ajustado según la estructura del texto
-            header = ["NRO CE", "FECHA", "PLACA", "TRANSPORTISTA", "BULTOS", "PESO BRUTO", "PESO NETO",
-                      "Nros. Precintos", "SENASAG"]
+            header = ["No.","NRO CE", "FECHA", "PLACA", "TRANSPORTISTA", "BULTOS", "PESO BRUTO", "PESO NETO",
+                      "Nros. Precintos SENASAG"]
 
-            # Procesar cada línea para encontrar las que contienen datos relevantes
             for line in lines:
                 # Detectar si la línea es parte de la tabla (empieza con el encabezado)
-                if line.startswith("NRO CE") and not header_found:
+                if line.startswith("No.") and not header_found:
                     header_found = True  # Marca que el encabezado ha sido encontrado
                 elif header_found:
-                    # Si encontramos la línea "TOTALES", detenemos la extracción
+                    # Si encontramos la línea "TOTALES", detenemos la extracción sin agregar la línea
                     if "TOTALES" in line:
-                        totals = line.split()
-                        # Aseguramos que el número de columnas sea consistente
-                        totals = totals[:7] + [""] * (
-                                    len(header) - len(totals))  # Añadimos columnas vacías si es necesario
-                        data.append(totals)
                         break
                     else:
-                        # Separar las columnas por espacios y asegurarse de que la fila tenga el número correcto de columnas
+                        # Separar las columnas por espacios
                         columns = line.split()
-                        if len(columns) == len(header):  # Verifica que el número de columnas coincida
-                            data.append(columns)
 
+                        # Asegurarnos de tener al menos las 8 columnas esperadas antes de procesar
+                        if len(columns) >= len(header):
+                            # Organizar las columnas fijas
+                            no = columns[0]  # No.
+                            nro_ce = columns[1]  # NRO CE
+                            fecha = columns[2]  # FECHA
+                            placa = columns[3]  # PLACA
+
+                            # Las últimas 4 columnas son siempre los mismos datos
+                            bultos = columns[-4]
+                            peso_bruto = columns[-3]
+                            peso_neto = columns[-2]
+                            nro_precintos = columns[-1]
+
+                            # Todo lo que queda en el medio se considera como el nombre del transportista
+                            transportista = " ".join(columns[4:-4])
+
+                            # Crear la fila de datos organizada
+                            row = [no, nro_ce, fecha, placa, transportista, bultos, peso_bruto, peso_neto,
+                                   nro_precintos]
+                            data.append(row)
+            print("encontro encabezado?", header_found)
             # Crear un DataFrame con los datos extraídos
             df_text_table = pd.DataFrame(data, columns=header)
             # Convertir el DataFrame a una lista de diccionarios
             return df_text_table.to_dict(orient='records')
 
-        # Si se extrajeron tablas, devolverlas
-        return tables if tables else []
 # Función para extraer datos de un archivo Excel
 def extract_excel_data(file):
     try:
