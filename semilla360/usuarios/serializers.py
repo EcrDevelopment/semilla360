@@ -9,14 +9,21 @@ from .models import PasswordResetToken
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 import re
 
-
+#este serializer define la estructura de la respuesta que se enviara al momento de hacer login
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
 
-        # Agregar datos personalizados
-        data['username'] = self.user.first_name+' '+self.user.last_name  # Ajusta 'name' según el campo de nombre en tu modelo de usuario
-        #data['role'] = self.user.role  # Ajusta 'role' según el campo de rol en tu modelo de usuario
+        # Agregar información del usuario
+        data['user'] = {
+            'id': self.user.id,
+            'username': self.user.username,
+            'email': self.user.email,
+            'nombre': self.user.first_name,
+            'apellido': self.user.last_name,
+            # Aquí puedes agregar más campos si es necesario
+        }
+        #print(data)
 
         return data
 

@@ -2,12 +2,14 @@
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .serializers import PasswordResetSerializer, PasswordResetConfirmSerializer# views.py
+from .serializers import PasswordResetSerializer, PasswordResetConfirmSerializer,CustomTokenObtainPairSerializer
 from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from .models import PasswordResetToken
-from rest_framework_simplejwt.views import TokenObtainPairView
-from .serializers import CustomTokenObtainPairSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView,TokenRefreshView
+from django.http import JsonResponse
+from django.conf import settings
+from rest_framework.utils import json
 
 
 
@@ -47,5 +49,55 @@ class PasswordResetConfirmView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        response_data = serializer.validated_data
+        secure = settings.DEBUG is False  # Secure solo cuando está en producción
+
+        # Crear la respuesta
+        response = Response(response_data)
+
+        # Establecer cookies con los tokens correctamente
+        '''
+        response.set_cookie(
+            'access_token', response_data['access'], httponly=True, secure=secure, samesite='None',
+            max_age=10, path='/'
+        )
+        response.set_cookie(
+            'refresh_token', response_data['refresh'], httponly=True, secure=secure, samesite='None',
+            max_age=60, path='/'
+        )
+        '''
+
+        return response
+
+# Vista para refresh de token
+class CustomTokenRefreshView(TokenRefreshView):
+    def post(self, request, *args, **kwargs):
+        # Obtener el refresh_token de las cookies
+        refresh_token = request.COOKIES.get('refresh_token')
+
+        # Si no está en las cookies, intentar obtenerlo de los parámetros de la solicitud
+        if not refresh_token:
+            print('no se encontro token en las cookies')
+            refresh_token = request.data.get('refresh')
+
+        # Validar que se haya encontrado el token
+        if not refresh_token:
+            print('no se encontro token en la request')
+            return JsonResponse({'error': 'Refresh token not found'}, status=400)
+
+        data = request.data.copy()
+
+        data['refresh'] = refresh_token
+
+        # Reemplazar los datos de la solicitud original con la copia mutable
+        request._body = json.dumps(data)
+        # Llamar al metodo original de TokenRefreshView
+        return super().post(request, *args, **kwargs)

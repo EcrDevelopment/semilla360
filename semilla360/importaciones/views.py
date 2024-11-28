@@ -155,13 +155,31 @@ def buscar_orden_importacion(request):
 
         # Valida que se haya proporcionado la base de datos y el término de búsqueda
         if base_datos and termino_busqueda:
-            # Filtra los registros que coincidan con el término de búsqueda
+            # Filtra las órdenes que coincidan con el término de búsqueda
             registros = OrdenCompraStarsoft.objects.using(base_datos).filter(
                 CNUMERO__icontains=termino_busqueda
-            ).values('CNUMERO', 'CDESARTIC', 'CCODARTIC', 'NCANTIDAD', 'CUNIDAD', 'NPREUNITA', 'NTOTVENT')[:5]
+            ).prefetch_related('detalles')[:5]  # Carga los detalles relacionados
 
-            # Serializa los resultados como JSON
-            return JsonResponse(list(registros), safe=False, status=200)
+            # Serializa las órdenes junto con sus detalles
+            resultado = []
+            for registro in registros:
+                # Extraemos la orden principal
+                orden = {
+                    'CNUMERO': registro.CNUMERO,
+                    'CDESARTIC': registro.CDESARTIC,
+                    'CCODARTIC': registro.CCODARTIC,
+                    'NCANTIDAD': registro.NCANTIDAD,
+                    'CUNIDAD': registro.CUNIDAD,
+                    'NPREUNITA': registro.NPREUNITA,
+                    'NTOTVENT': registro.NTOTVENT,
+                    'proveedor': registro.detalles.CDESPROVE,
+                    'codprovee': registro.detalles.CCODPROVE,
+                }
+
+                print(orden)
+                resultado.append(orden)
+
+            return JsonResponse(resultado, safe=False, status=200)
         else:
             return JsonResponse({'error': 'Parámetros inválidos'}, status=400)
 

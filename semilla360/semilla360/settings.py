@@ -175,6 +175,15 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # Origen donde se ejecuta tu frontend React
 ]
 
+# Si tu backend necesita manejar credenciales (por ejemplo, autenticación con JWT)
+CORS_ALLOW_CREDENTIALS = True
+
+# Permitir headers adicionales si es necesario (como Authorization para JWT)
+CORS_ALLOW_HEADERS = [
+    'content-type',
+    'authorization',  # Para permitir encabezados de autorización
+]
+
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
@@ -188,7 +197,7 @@ FRONTEND_URL = "http://localhost:3000"
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),  # Tiempo de validez del token de acceso
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),      # Tiempo de validez del token de refresco
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),      # Tiempo de validez del token de refresco
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'ALGORITHM': 'HS256',

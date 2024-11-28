@@ -1,5 +1,7 @@
 from django.db import models
 
+
+
 class Product(models.Model):
     nombre = models.CharField(max_length=255)
     price = models.DecimalField(max_digits=10, decimal_places=2)
@@ -67,3 +69,62 @@ class OrdenCompraStarsoft(models.Model):
         managed = False  # Indicamos que Django no debería crear esta tabla
 
 
+class OrdenCompraDetStarsoft(models.Model):
+    CNUMERO= models.OneToOneField(
+        OrdenCompraStarsoft,  # Relación con el modelo principal
+        on_delete=models.CASCADE,
+        db_column='CNUMERO',  # Coincide con el campo de la tabla
+        primary_key=True,
+        related_name = 'detalles'
+    )
+    #cnumero = models.CharField(max_length=13, primary_key=True)
+    CNUMIMP = models.CharField(max_length=13, null=True, blank=True)
+    CCODPROVE = models.CharField(max_length=11, null=True, blank=True)
+    CDESPROVE = models.CharField(max_length=100, null=True, blank=True)
+    FEMISION = models.DateTimeField(null=True, blank=True)
+    # FENTREGA = models.DateTimeField(null=True, blank=True)
+    NIMPORTE = models.FloatField(default=0)
+    CCODMONIM = models.CharField(max_length=4, null=True, blank=True)
+    NEQUIV_US = models.FloatField(default=0)
+    NTIPCAMBI = models.FloatField(default=0)
+    CESTADO = models.CharField(max_length=4, null=True, blank=True)
+    CLIQADUAN = models.CharField(max_length=20, null=True, blank=True)
+    CSOLIINSP = models.CharField(max_length=16, null=True, blank=True)
+    CGUIATRAN = models.CharField(max_length=16, null=True, blank=True)
+    NLIQVALOR = models.FloatField(default=0)
+    LLIQREAL = models.BooleanField(default=False)
+    NSALDOTOT = models.FloatField(default=0)
+    NSALLIQUI = models.FloatField(default=0)
+    COBSERVAC = models.CharField(max_length=100, null=True, blank=True)
+    LREAL = models.BooleanField(default=False)
+    TIPORDEN = models.CharField(max_length=2, null=True, blank=True)
+    CNUMLIQUI = models.CharField(max_length=20, null=True, blank=True)
+    NADVALOR = models.FloatField(default=0)
+    CVOLANTE = models.CharField(max_length=13, null=True, blank=True)
+    CLLAVE = models.CharField(max_length=13, null=True, blank=True)
+    CCONVER = models.CharField(max_length=3, null=True, blank=True)
+    CPACKING = models.CharField(max_length=13, null=True, blank=True)
+    TIPCONVER = models.CharField(max_length=3, null=True, blank=True)
+    TIPPREIMP = models.CharField(max_length=3, null=True, blank=True)
+    CSITUACION = models.CharField(max_length=2, null=True, blank=True)
+    CTERM = models.TextField(null=True, blank=True)
+    CFLETE = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    CSEGURO = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    CETAPA = models.CharField(max_length=8, null=True, blank=True)
+    #CDESSEMB = models.CharField(max_length=100, null=True, blank=True)
+    CCODCLI = models.CharField(max_length=11, null=True, blank=True)
+    CDESCLI = models.CharField(max_length=100, null=True, blank=True)
+    CCODMARCA = models.CharField(max_length=20, null=True, blank=True)
+    CDESMARCA = models.CharField(max_length=30, null=True, blank=True)
+    COD_AUDITORIA = models.CharField(max_length=12, null=True, blank=True)
+    CFLETE_MN = models.DecimalField(max_digits=15, decimal_places=6, default=0)
+    CSEGURO_MN = models.DecimalField(max_digits=15, decimal_places=6, default=0)
+    TIPODOCUMENTO = models.CharField(max_length=2, default='OI')
+
+    class Meta:
+        db_table = 'IMPORC'
+        managed = False
+
+
+    def __str__(self):
+        return f"{self.cnumero}"
