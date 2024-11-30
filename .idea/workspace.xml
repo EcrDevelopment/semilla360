@@ -27,6 +27,9 @@
       <change afterPath="$PROJECT_DIR$/semilla360/semilla360_front/src/pages/ResetPasswordRequest.js" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/semilla360/semilla360_front/tailwind.config.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/semilla360/importaciones/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/semilla360/importaciones/models.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/semilla360/importaciones/urls.py" beforeDir="false" afterPath="$PROJECT_DIR$/semilla360/importaciones/urls.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/semilla360/importaciones/views.py" beforeDir="false" afterPath="$PROJECT_DIR$/semilla360/importaciones/views.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/semilla360/semilla360_front" beforeDir="false" afterPath="$PROJECT_DIR$/semilla360/semilla360_front" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/semilla360/semilla360_front/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/semilla360/semilla360_front/package-lock.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/semilla360/semilla360_front/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/semilla360/semilla360_front/package.json" afterDir="false" />

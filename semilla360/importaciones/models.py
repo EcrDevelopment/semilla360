@@ -128,3 +128,54 @@ class OrdenCompraDetStarsoft(models.Model):
 
     def __str__(self):
         return f"{self.cnumero}"
+
+
+class Proveedor(models.Model):
+    PRVCCODIGO = models.CharField(max_length=11, primary_key=True, db_column='PRVCCODIGO')
+    PRVCNOMBRE = models.CharField(max_length=100, blank=True, null=True, db_column='PRVCNOMBRE')
+    PRVCDIRECC = models.CharField(max_length=100, blank=True, null=True, db_column='PRVCDIRECC')
+    PRVCLOCALI = models.CharField(max_length=25, blank=True, null=True, db_column='PRVCLOCALI')
+    PRVCPAISAC = models.CharField(max_length=15, blank=True, null=True, db_column='PRVCPAISAC')
+    PRVCTELEF1 = models.CharField(max_length=30, blank=True, null=True, db_column='PRVCTELEF1')
+    PRVCFAXACR = models.CharField(max_length=15, blank=True, null=True, db_column='PRVCFAXACR')
+    PRVCTIPOAC = models.CharField(max_length=2, blank=True, null=True, db_column='PRVCTIPOAC')
+    PRVCGIROAC = models.CharField(max_length=2, blank=True, null=True, db_column='PRVCGIROAC')
+    PRVCREPRES = models.CharField(max_length=40, blank=True, null=True, db_column='PRVCREPRES')
+    PRVCCARREP = models.CharField(max_length=20, blank=True, null=True, db_column='PRVCCARREP')
+    PRVCTELREP = models.CharField(max_length=15, blank=True, null=True, db_column='PRVCTELREP')
+    PRVDFECCRE = models.DateTimeField(blank=True, null=True, db_column='PRVDFECCRE')
+    PRVCUSER = models.CharField(max_length=8, blank=True, null=True, db_column='PRVCUSER')
+    PRPVCRUC = models.CharField(max_length=11, blank=True, null=True, db_column='PRPVCRUC')
+    PRVCRUC = models.CharField(max_length=11, blank=True, null=True, db_column='PRVCRUC')
+    PRVCABREVI = models.CharField(max_length=12, blank=True, null=True, db_column='PRVCABREVI')
+    PRVCESTADO = models.CharField(max_length=2, blank=True, null=True, db_column='PRVCESTADO')
+    PRVDFECMOD = models.DateTimeField(blank=True, null=True, db_column='PRVDFECMOD')
+    PRVEMAIL = models.CharField(max_length=50, blank=True, null=True, db_column='PRVEMAIL')
+    PRVCODFAB = models.CharField(max_length=1, blank=True, null=True, db_column='PRVCODFAB')
+    PRVPAGO = models.CharField(max_length=4, blank=True, null=True, db_column='PRVPAGO')
+    PRVFACTOR = models.DecimalField(max_digits=15, decimal_places=6, blank=True, null=True, db_column='PRVFACTOR')
+    PRVGLOSA = models.CharField(max_length=255, blank=True, null=True, db_column='PRVGLOSA')
+    PRVREPRESENTANTE = models.CharField(max_length=60, blank=True, null=True, db_column='PRVREPRESENTANTE')
+    PRVCONTACTO = models.CharField(max_length=60, blank=True, null=True, db_column='PRVCONTACTO')
+    PRVTELREP = models.CharField(max_length=30, blank=True, null=True, db_column='PRVTELREP')
+    PRVFAXREP = models.CharField(max_length=30, blank=True, null=True, db_column='PRVFAXREP')
+    PRVEMAILREP = models.CharField(max_length=60, blank=True, null=True, db_column='PRVEMAILREP')
+    PRVCTIPO_DOCUMENTO = models.CharField(max_length=2, blank=True, null=True, db_column='PRVCTIPO_DOCUMENTO')
+    PRVCAPELLIDO_PATERNO = models.CharField(max_length=20, blank=True, null=True, db_column='PRVCAPELLIDO_PATERNO')
+    PRVCAPELLIDO_MATERNO = models.CharField(max_length=20, blank=True, null=True, db_column='PRVCAPELLIDO_MATERNO')
+    PRVCPRIMER_NOMBRE = models.CharField(max_length=20, blank=True, null=True, db_column='PRVCPRIMER_NOMBRE')
+    PRVCSEGUNDO_NOMBRE = models.CharField(max_length=20, blank=True, null=True, db_column='PRVCSEGUNDO_NOMBRE')
+    PRVCDOCIDEN = models.CharField(max_length=15, blank=True, null=True, db_column='PRVCDOCIDEN')
+    FLGPORTAL_PROVEEDOR = models.BooleanField(blank=True, null=True, db_column='FLGPORTAL_PROVEEDOR')
+    FEC_INACTIVO_BLOQUEADO = models.DateTimeField(blank=True, null=True, db_column='FEC_INACTIVO_BLOQUEADO')
+    COD_AUDITORIA = models.CharField(max_length=12, blank=True, null=True, db_column='COD_AUDITORIA')
+    UBIGEO = models.CharField(max_length=12, blank=True, null=True, db_column='UBIGEO')
+
+    class Meta:
+        db_table = 'MAEPROV'
+        verbose_name = 'Proveedor'
+        verbose_name_plural = 'Proveedores'
+        managed = False
+
+    def __str__(self):
+        return self.prvcnombre or self.prvccodigo

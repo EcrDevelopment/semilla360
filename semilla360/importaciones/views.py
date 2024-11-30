@@ -1,4 +1,4 @@
-from .models import OrdenCompraStarsoft
+from .models import OrdenCompraStarsoft, Proveedor
 from .forms import BaseDatosForm
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
@@ -8,6 +8,7 @@ import pandas as pd
 import pytesseract
 from PIL import Image
 import pdfplumber
+
 
 
 
@@ -178,6 +179,36 @@ def buscar_orden_importacion(request):
 
                 print(orden)
                 resultado.append(orden)
+
+            return JsonResponse(resultado, safe=False, status=200)
+        else:
+            return JsonResponse({'error': 'Parámetros inválidos'}, status=400)
+
+    return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+@csrf_exempt
+def buscar_proveedor(request):
+    if request.method == 'GET':
+        base_datos = request.GET.get('base_datos')  # Base de datos seleccionada
+        termino_busqueda = request.GET.get('query')  # Término de búsqueda
+
+        # Valida que se haya proporcionado la base de datos y el término de búsqueda
+        if base_datos and termino_busqueda:
+            # Filtra las órdenes que coincidan con el término de búsqueda
+            registros = Proveedor.objects.using(base_datos).filter(
+                PRVCNOMBRE__icontains=termino_busqueda
+            )[:5]  # Carga los detalles relacionados
+
+            # Serializa las órdenes junto con sus detalles
+            resultado = []
+            for registro in registros:
+                # Extraemos la orden principal
+                proveedor = {
+                    'nombre': registro.PRVCNOMBRE,
+                }
+
+                print(proveedor)
+                resultado.append(proveedor)
 
             return JsonResponse(resultado, safe=False, status=200)
         else:
