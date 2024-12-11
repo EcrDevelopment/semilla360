@@ -1,0 +1,183 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+
+
+
+</body>
+</html><!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte</title>
+    <style>
+
+        th, td {
+            border: 1px solid black;
+            text-align: center;
+            vertical-align: middle;
+            padding: 3px;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        @page {
+            size: A4 landscape;
+            margin: 5mm;
+        }
+    </style>
+</head>
+<body>
+    <h2>{{ data.procesado.empresa }}</h2>
+    <h2 style="text-align:center;">{{ data.dataForm.producto }}</h2>
+    <h2>Carta Porte: {{ data.dataForm.cartaPorte }}</h2>
+    <table style="width: 100%;border:none">
+        <tbody>
+            <tr>
+                <td style="border:none;padding: 2px">
+                    N° DUA: {{data.dataForm.dua}}
+                </td>
+                <td style="border:none;padding: 2px">
+                    Fec. Num.: {{data.procesado.fecha_numeracion}}
+                </td >
+                <td style="border:none;padding: 2px">
+                    Factura N°: {{data.dataForm.numFactura}}
+                </td>
+                <td style="border:none;padding: 2px">
+                    O/C : {{data.dataForm.oc }}{{"("}}{{data.dataForm.numRecojo}}{{")"}}
+                </td>
+                <td style="border:none;padding: 2px">
+                     Cant.: {{data.procesado.total_sacos_cargados}} sacos
+                </td>
+                <td style="border:none;padding: 2px">
+                    {{data.procesado.suma_peso_salida}} Kg.
+                </td>
+            </tr>
+        </tbody>
+    </table>
+    <br>
+
+    <table style="width: 80%;
+            border-collapse: collapse;">
+        <thead>
+            <tr>
+                <th>
+                    FEC. INGRE.
+                </th>
+                <th colspan="2">
+                    EMPRESA DE TRANSP.
+                </th>
+                <th colspan="4">
+                    CARGA
+                </th>
+                <th colspan="4">
+                    DESCARGA
+                </th>
+                <th colspan="4">
+                    DESCUENTOS
+                </th>
+            </tr>
+            <tr>
+                <th rowspan="{{ data.procesado.len_tabla_two_more }}">{{data.procesado.fecha_numeracion}}</th>
+                <th colspan="2" rowspan="{{ data.procesado.len_tabla_one_more }}">{{data.dataForm.transportista}}</th>
+                <th>N°</th>
+                <th>Placa S.</th>
+                <th>Sacos C.</th>
+                <th>Peso S.</th>
+                <th>Placa L.</th>
+                <th>Sacos D.</th>
+                <th>Peso L.</th>
+                <th>Merma</th>
+                <th>S. Falt.</th>
+                <th>S. Rotos</th>
+                <th>S. Humed.</th>
+                <th>S. Mojad.</th>
+            </tr>
+
+        </thead>
+        <tbody>
+            {% for row in data.dataTable %}
+            <tr>
+
+                <td>{{ loop.index }}</td>
+                <td>{{ row.placa }}</td>
+                <td>{{ row.sacosCargados }}</td>
+                <td>{{ row.pesoSalida }}</td>
+                <td>{{ row.placaLlegada }}</td>
+                <td>{{ row.sacosDescargados }}</td>
+                <td>{{ row.pesoLlegada }}</td>
+                <td>{{ row.merma }}</td>
+                 <td>{{ row.sacosFaltantes}}</td>
+                 <td>{{ row.sacosRotos}}</td>
+                 <td>{{ row.sacosHumedos }}</td>
+                 <td>{{ row.sacosMojados }}</td>
+            </tr>
+            {% endfor %}
+        <tr>
+            <td>
+                Flete x TM
+            </td>
+            <td>
+                $ {{data.dataForm.fletePactado}}
+            </td>
+            <td>
+                {{data.procesado.len_tabla}}
+            </td>
+            <td>
+                TOTAL
+            </td>
+            <td>
+                {{data.procesado.total_sacos_cargados}}
+            </td>
+            <td>
+                {{data.procesado.suma_peso_salida}}
+            </td>
+            <td>
+                TOTAL
+            </td>
+            <td>
+                {{data.procesado.total_sacos_descargados}}
+            </td>
+            <td>
+                {{data.procesado.suma_peso_llegada}}
+            </td>
+            <td>
+                {{data.procesado.merma_total}}
+            </td>
+            <td>
+                {{data.procesado.total_sacos_faltantes}}
+            </td>
+            <td>
+                {{data.procesado.total_sacos_rotos}}
+            </td>
+            <td>
+                {{data.procesado.total_sacos_humedos}}
+            </td>
+            <td>
+                {{data.procesado.total_sacos_mojados}}
+            </td>
+        </tr>
+        </tbody>
+    </table>
+
+<br>
+    <table>
+        <tbody>
+            <tr>
+                <td>
+                    Faltante peso Sta. Cruz - Desaguadero
+                </td>
+                <td>
+                    {{data.procesado.diferencia_de_peso}}
+                </td>
+            </tr>
+        </tbody>
+    </table>
+
+</body>
+</html>
