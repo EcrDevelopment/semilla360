@@ -21,24 +21,27 @@
             border: 1px solid black;
             text-align: center;
             vertical-align: middle;
-            padding: 3px;
+            padding: 1px;
         }
         th {
             background-color: #f2f2f2;
         }
+        li{
+        line-height: 1;
+        }
         @page {
             size: A4 landscape;
-            margin: 5mm;
+            margin: 7mm;
         }
     </style>
 </head>
 <body>
     <h2>{{ data.procesado.empresa }}</h2>
-    <h2 style="text-align:center;">{{ data.dataForm.producto }}</h2>
+    <h2 style="text-align:center;background-color:#ddf542;">{{ data.dataForm.producto }}</h2>
     <h2>Carta Porte: {{ data.dataForm.cartaPorte }}</h2>
     <table style="width: 100%;border:none">
         <tbody>
-            <tr>
+            <tr >
                 <td style="border:none;padding: 2px">
                     N° DUA: {{data.dataForm.dua}}
                 </td>
@@ -166,18 +169,147 @@
     </table>
 
 <br>
-    <table>
-        <tbody>
-            <tr>
-                <td>
-                    Faltante peso Sta. Cruz - Desaguadero
-                </td>
-                <td>
-                    {{data.procesado.diferencia_de_peso}}
-                </td>
-            </tr>
-        </tbody>
+
+
+    <table style="border:none;">
+        <tr style="border:none;">
+            <td style="border:none;">
+                <div >
+                    <table >
+                        <tbody>
+                            <tr style="width:30%">
+                                <td>
+                                    Faltante peso Sta. Cruz - Desaguadero
+                                </td>
+                                <td>
+                                    {{data.procesado.diferencia_de_peso|round(2)}} Kg.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    Merma permitida
+                                </td>
+                                <td>
+                                    {{data.dataExtra.mermaPermitida|round(2)}} Kg.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    Desc. diferencia de peso
+                                </td>
+                                <td>
+                                    {{data.procesado.diferencia_peso_por_cobrar|round(2)}} Kg.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <ul style="list-style-type: none;padding:0;margin:0; margin-top:5px; justify-content: space-between;text-align: none;">
+                        <li><strong>Dsctos.</strong></li>
+
+                        {% if data.procesado.descuento_por_diferencia_peso > 0 %}
+                        <li style="background-color:#ddf542;">
+                            B/V 004-: dscto. x dif. peso
+                            <span style="width:100%;float:right;">$ {{ data.procesado.descuento_por_diferencia_peso| round(2) }}</span>
+                        </li>
+                        {% endif %}
+
+                        {% if data.procesado.total_descuento_estiba > 0 %}
+                        <li style="background-color:#ddf542;">
+                            B/V 004-: dscto. x estibaje
+                            <span style="width:100%;float:right;">$ {{data.procesado.total_descuento_estiba| round(2)}}</span>
+                        </li>
+                        {% endif %}
+
+                    </ul>
+                </div>
+            </td>
+
+            <td style="border:none;">
+
+            </td>
+
+            <td style="border:none;">
+                <table>
+                    <tr>
+                        <td>
+                            FLETE
+                        </td>
+                        <td>
+                            $ {{data.procesado.flete_base}}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="font-size: 7px; text-align:left;">
+                            Dscto. por peso Faltante
+                        </td>
+                        <td>
+                            $ {{ data.procesado.descuento_por_diferencia_peso| round(2) }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="font-size: 7px; text-align:left;">
+                            Dscto. por sacos faltantes
+                        </td>
+                        <td>
+                            $ {{data.procesado.descuento_sacos_rotos}}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="font-size: 7px; text-align:left;">
+                            Dscto. por sacos rotos
+                        </td>
+                        <td>
+                            $ {{data.procesado.descuento_sacos_rotos}}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="font-size: 7px; text-align:left;">
+                            Dscto. por sacos humedos
+                        </td>
+                        <td>
+                            $ {{data.procesado.descuento_sacos_humedos}}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="font-size: 7px; text-align:left;">
+                            Dscto. por sacos mojados
+                        </td>
+                        <td>
+                            $ {{data.procesado.descuento_sacos_mojados}}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            FLETE TOTAL
+                        </td>
+                        <td>
+                            $ {{data.procesado.flete_base}}
+                        </td>
+                    </tr>
+                </table>
+                <ul style="list-style-type: none;padding:0;margin:0; margin-top:5px; justify-content: space-between;text-align: none;">
+                        {% for item in data.procesado.pago_estiba_list %}
+                        <li style="">
+                            {{ item.placa }}{{" "}}{{item.detalle}}
+                            <span style="width:100%;float:right;">$ {{item.monto_descuento}}</span>
+                        </li>
+                        {% endfor %}
+                </ul>
+            </td>
+            <td style="border:none;">
+
+            </td>
+            <td style="border:none;">
+
+            </td>
+            <td style="border:none;">
+
+            </td>
+        </tr>
+
     </table>
+
+
 
 </body>
 </html>

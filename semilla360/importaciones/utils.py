@@ -4,7 +4,7 @@ from jinja2 import Environment, FileSystemLoader
 from xhtml2pdf import pisa
 import os
 
-def calcular_monto_descuento_estiba(cantidad, tipoCambio):
+def calcular_monto_descuento_estiba(ref_base,cantidad, tipoCambio):
     """
     Calcula el monto de descuento para estiba basado en una regla de tres simple.
 
@@ -16,7 +16,7 @@ def calcular_monto_descuento_estiba(cantidad, tipoCambio):
         float: El monto de descuento en la moneda correspondiente al tipo de cambio.
     """
     # Base para la regla de tres
-    referencia_cantidad = 560
+    referencia_cantidad = ref_base
     referencia_descuento = 100  # Descuento en bolivianos para 560
 
     # Si la cantidad es exactamente igual a la referencia, usa directamente el valor
@@ -62,6 +62,7 @@ def generar_pdf(template_path, output_path, data):
         print("Hubo un error al generar el PDF.")
 
 
+
 def procesar_data_reporte(data):
     # Obtener los datos principales
     dataForm = data.get('dataForm', {})
@@ -102,7 +103,7 @@ def procesar_data_reporte(data):
         total_sacos_rotos += int(item["sacosRotos"])  # Contar sacos rotos
         total_sacos_humedos += int(item["sacosHumedos"])  # Contar sacos húmedos
         total_sacos_mojados += int(item["sacosMojados"])  # Contar sacos mojado
-        # Evaluar el valor de pagoEstiba
+
         # Evaluar el valor de pagoEstiba
         pago_estiba_value = item.get("pagoEstiba")
 
@@ -118,16 +119,15 @@ def procesar_data_reporte(data):
             pago_estiba_list.append({
                 "placa": item['placaLlegada'],
                 "detalle": pago_estiba_value,
-                "monto_descuento": calcular_monto_descuento_estiba(item["sacosDescargados"],
-                                                                   dataExtra["tipoCambioDescExt"])
+                "monto_descuento": calcular_monto_descuento_estiba(item["sacosDescargados"],item["sacosDescargados"],dataExtra["tipoCambioDescExt"])
             })
 
         # Caso 2: "Pago parcial"
         elif "Pago parcial" in pago_estiba_value:
             pago_estiba_list.append({
-                "placa": {item['placaLlegada']},
-                "detalle": pago_estiba_value,
-                "monto_descuento": calcular_monto_descuento_estiba(item["sacosDescargados"],
+                "placa": item['placaLlegada'],
+                "detalle": f"No pago x {item["cantDesc"]}",
+                "monto_descuento": calcular_monto_descuento_estiba(item["sacosDescargados"],item["cantDesc"],
                                                                    dataExtra["tipoCambioDescExt"])
             })
 
@@ -205,7 +205,13 @@ def procesar_data_reporte(data):
             "total_descuento_estiba": total_descuento_estiba,
             "merma_total": merma_total,
             "diferencia_de_peso":diferencia_peso_kg ,
+            "diferencia_peso_por_cobrar":diferencia_peso_por_cobrar,
+            "descuento_por_diferencia_peso":descuento_por_diferencia_peso,
+            "descuento_sacos_rotos": descuento_sacos_rotos,
+            "descuento_sacos_humedos":descuento_sacos_humedos,
+            "descuento_sacos_mojados":descuento_sacos_mojados,
             "pago_estiba_list": tuple(pago_estiba_list),
+            "flete_base":round(flete_base,2),
             "empresa": empresa,
             "fecha_numeracion":fecha_numeracion,
             "len_tabla": len(dataTable),
