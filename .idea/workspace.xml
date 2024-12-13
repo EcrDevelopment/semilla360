@@ -6,7 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="98d3083e-4637-464a-a441-a15b92abec41" name="Changes" comment="backend para tablas nivel 1">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/semilla360/importaciones/templates/importaciones/reporteFletesExtranjeros.html" beforeDir="false" afterPath="$PROJECT_DIR$/semilla360/importaciones/templates/importaciones/reporteFletesExtranjeros.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/semilla360/importaciones/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/semilla360/importaciones/utils.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/semilla360/semilla360_front" beforeDir="false" afterPath="$PROJECT_DIR$/semilla360/semilla360_front" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/semilla360/semilla360_front/semilla360_front.rar" beforeDir="false" afterPath="$PROJECT_DIR$/semilla360/semilla360_front/semilla360_front.rar" afterDir="false" />

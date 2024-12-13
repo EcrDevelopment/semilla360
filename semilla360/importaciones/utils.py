@@ -61,7 +61,8 @@ def generar_pdf(template_path, output_path, data):
     else:
         print("Hubo un error al generar el PDF.")
 
-
+def calcular_monto_por_descuentos_de_sacos(flete_base,dscto_peso_faltante,dscto_sacos_faltante,dscto_sacos_rotos,dscto_sacos_humedos,dscto_sacos_mojados):
+    return flete_base-(dscto_peso_faltante + dscto_sacos_faltante + dscto_sacos_rotos+dscto_sacos_humedos + dscto_sacos_mojados)
 
 def procesar_data_reporte(data):
     # Obtener los datos principales
@@ -146,6 +147,7 @@ def procesar_data_reporte(data):
         diferencia_peso_por_cobrar = None  # Si no excede la merma permitida, no se cobra
 
     # Calcular los descuentos por sacos dañados
+
     descuento_sacos_rotos = total_sacos_rotos * dataExtra["precioSacosRotos"]
     descuento_sacos_humedos = total_sacos_humedos * dataExtra["precioSacosHumedos"]
     descuento_sacos_mojados = total_sacos_mojados * dataExtra["precioSacosMojados"]
@@ -173,6 +175,8 @@ def procesar_data_reporte(data):
 
     # Paso 2: Calcular el precio por kg
     precio_por_kg = precio_bruto_final / 1000
+
+    descuento_sacos_faltantes = total_sacos_faltantes * precio_por_kg
 
     # Paso 3: Calcular el descuento por diferencia de peso
     # Si la diferencia de peso por cobrar es positiva, calculamos el descuento
@@ -210,6 +214,7 @@ def procesar_data_reporte(data):
             "descuento_sacos_rotos": descuento_sacos_rotos,
             "descuento_sacos_humedos":descuento_sacos_humedos,
             "descuento_sacos_mojados":descuento_sacos_mojados,
+            "total_luego_dsctos_sacos":calcular_monto_por_descuentos_de_sacos(flete_base,descuento_sacos_faltantes,descuento_sacos_rotos,descuento_sacos_rotos,descuento_sacos_humedos,descuento_sacos_mojados),
             "pago_estiba_list": tuple(pago_estiba_list),
             "flete_base":round(flete_base,2),
             "empresa": empresa,
