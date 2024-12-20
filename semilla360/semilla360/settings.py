@@ -15,7 +15,7 @@ SECRET_KEY = 'django-insecure-zw1$5%r#acn5__hra*66qd6uem0bi3^w_5m*3#br7wvvxl0etj
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '10.168.0.5']
 
 
 # Application definition
@@ -172,7 +172,8 @@ GRAPHENE = {
 }
 
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # Origen donde se ejecuta tu frontend React
+    "http://localhost:3000",
+    "http://10.168.0.5:3000",# Origen donde se ejecuta tu frontend React
 ]
 
 # Si tu backend necesita manejar credenciales (por ejemplo, autenticación con JWT)

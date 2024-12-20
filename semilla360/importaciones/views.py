@@ -1,3 +1,4 @@
+import math
 from datetime import datetime
 from reportlab.lib.pagesizes import landscape, letter
 from io import BytesIO
@@ -46,7 +47,7 @@ def extract_pdf_tables(file):
             for page in pdf.pages:
                 text += page.extract_text()  # Extraer todo el texto del PDF
 
-            print(text)
+            #print(text)
             lines = text.splitlines()  # Dividir el texto en líneas
 
             data = []
@@ -89,7 +90,7 @@ def extract_pdf_tables(file):
                             row = [no, nro_ce, fecha, placa, transportista, bultos, peso_bruto, peso_neto,
                                    nro_precintos]
                             data.append(row)
-            print("encontro encabezado?", header_found)
+            #print("encontro encabezado?", header_found)
             # Crear un DataFrame con los datos extraídos
             df_text_table = pd.DataFrame(data, columns=header)
             # Convertir el DataFrame a una lista de diccionarios
@@ -139,8 +140,68 @@ def upload_file(request):
 
     return JsonResponse({"error": "No se proporcionó archivo."}, status=400)
 
+leyenda_codigos = {
+    1: "Transbordo",
+    2: "Pago estiba",
+    3: "No pago estiba",
+    4: "Pago parcial",
+}
+
+@api_view(['POST'])
+def upload_file_excel(request):
+    try:
+        uploaded_file = request.FILES.get('file')
+        if not uploaded_file:
+            return JsonResponse({"error": "No se proporcionó archivo."}, status=400)
+
+        # Leer el archivo Excel usando openpyxl
+        df = pd.read_excel(uploaded_file, engine='openpyxl', skiprows=1, header=0)
+
+        # Limpiar y renombrar columnas
+        df.columns = ["Item", "PLACA", "sacos_cargados", "peso_cargado", "PLACA_Balanza",
+                      "sacos_entregados", "peso_balanza", "Merma", "descuentos_faltantes",
+                      "descuentos_rotos", "descuentos_humedos", "descuentos_mojados", "Status_pago"]
+
+        # Renombrar columnas para el frontend
+        df.rename(columns={
+            "Item": "item_nombre",
+            "PLACA": "placa_salida",
+            "sacos_cargados": "sacos_cargados",
+            "peso_cargado": "peso_salida",
+            "PLACA_Balanza": "placa_llegada",
+            "sacos_entregados": "sacos_descargados",
+            "peso_balanza": "peso_llegada",
+            "Merma": "merma",
+            "descuentos_faltantes": "sacos_faltantes",
+            "descuentos_rotos": "sacos_rotos",
+            "descuentos_humedos": "sacos_humedos",
+            "descuentos_mojados": "sacos_mojados",
+            "Status_pago": "descripcion_pago"
+        }, inplace=True)
 
 
+
+        # Procesar códigos usando la leyenda
+        def procesar_codigo(codigo):
+            try:
+                codigo_entero = int(math.floor(float(codigo)))
+                return leyenda_codigos.get(codigo_entero, "Seleccione")
+            except (ValueError, TypeError):
+                return "Seleccione"
+
+        # Aplicar procesamiento de códigos
+        df["pago_estiba"] = df["descripcion_pago"].apply(procesar_codigo)
+
+        # Borrar columnas que no necesito
+        df.drop(columns=["item_nombre", "merma","descripcion_pago"], inplace=True)
+
+        # Convertir el DataFrame en una respuesta JSON
+        result = df.to_dict(orient='records')
+
+        return JsonResponse({"data": result}, status=200)
+
+    except Exception as e:
+        return JsonResponse({"error": f"Error al procesar archivo: {str(e)}"}, status=400)
 
 # Vista para listar las importaciones
 def listar_importaciones(request):
@@ -152,7 +213,6 @@ def listar_importaciones(request):
         registros = OrdenCompraStarsoft.objects.using(base_datos).all()  # Consultar en la base seleccionada
 
     return render(request, 'importaciones/lista_importaciones.html', {'form': form, 'registros': registros})
-
 
 # Vista para buscar órdenes de importación
 @csrf_exempt
@@ -184,7 +244,7 @@ def buscar_orden_importacion(request):
                     'codprovee': registro.detalles.CCODPROVE,
                 }
 
-                print(orden)
+                #print(orden)
                 resultado.append(orden)
 
             return JsonResponse(resultado, safe=False, status=200)
@@ -214,7 +274,7 @@ def buscar_proveedor(request):
                     'nombre': registro.PRVCNOMBRE,
                 }
 
-                print(proveedor)
+                #print(proveedor)
                 resultado.append(proveedor)
 
             return JsonResponse(resultado, safe=False, status=200)
@@ -480,7 +540,6 @@ def generar_reporte(request):
             return JsonResponse({'status': 'error', 'message': 'Error al procesar JSON'}, status=400)
     else:
                 return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
-
 
 @csrf_exempt
 def generar_reporte_dos(request):

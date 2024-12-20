@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import listar_importaciones, buscar_orden_importacion, upload_file, buscar_proveedor , generar_reporte_dos
+from .views import listar_importaciones, buscar_orden_importacion, upload_file,upload_file_excel, buscar_proveedor , generar_reporte_dos
 from graphene_django.views import GraphQLView
 from .schema import schema
 
@@ -16,6 +16,7 @@ urlpatterns = [
     path('buscar_prov/', buscar_proveedor, name='buscar_proveedor'),
     path('generar_reporte/', generar_reporte_dos, name='generar_reporte'),
     path('upload/', upload_file, name='upload_file'),
+    path('upload-file-excel/', upload_file_excel, name='upload_file_excel'),
 ]
 
 

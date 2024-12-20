@@ -1,33 +1,8 @@
 from datetime import datetime
-
 from jinja2 import Environment, FileSystemLoader
 from xhtml2pdf import pisa
 import os
 
-def calcular_monto_descuento_estiba(ref_base,cantidad, tipoCambio):
-    """
-    Calcula el monto de descuento para estiba basado en una regla de tres simple.
-
-    Args:
-        cantidad (int): La cantidad de sacos cargados.
-        tipoCambio (float): El tipo de cambio para convertir el monto.
-
-    Returns:
-        float: El monto de descuento en la moneda correspondiente al tipo de cambio.
-    """
-    # Base para la regla de tres
-    referencia_cantidad = ref_base
-    referencia_descuento = 100  # Descuento en bolivianos para 560
-
-    # Si la cantidad es exactamente igual a la referencia, usa directamente el valor
-    if cantidad == referencia_cantidad:
-        monto_descuento_moneda = (referencia_descuento / tipoCambio)/3
-    else:
-        # Aplicar regla de tres simple para otras cantidades
-        total_descuento_bolivianos = (cantidad * referencia_descuento) / referencia_cantidad
-        monto_descuento_moneda = (total_descuento_bolivianos / tipoCambio)/3
-
-    return round(monto_descuento_moneda, 2)
 
 def renderizar_template(template_path, data):
     """
@@ -61,8 +36,93 @@ def generar_pdf(template_path, output_path, data):
     else:
         print("Hubo un error al generar el PDF.")
 
-def calcular_monto_por_descuentos_de_sacos(flete_base,dscto_peso_faltante,dscto_sacos_faltante,dscto_sacos_rotos,dscto_sacos_humedos,dscto_sacos_mojados):
-    return flete_base-(dscto_peso_faltante + dscto_sacos_faltante + dscto_sacos_rotos+dscto_sacos_humedos + dscto_sacos_mojados)
+def calcular_monto_luego_dsctos_sacos(flete_base,total_descuento_sacos,total_descuento_por_dif_peso):
+    result=flete_base-(total_descuento_sacos+total_descuento_por_dif_peso)
+    print(flete_base,total_descuento_sacos,total_descuento_por_dif_peso)
+    return round(result,2)
+
+def calcular_descuento_sacos(total_sacos_faltantes,total_sacos_rotos,total_sacos_humedos,total_sacos_mojados):
+    return total_sacos_faltantes+total_sacos_rotos+total_sacos_humedos+total_sacos_mojados
+
+def calcular_monto_descuento_estiba(ref_base,cantidad, tipoCambio):
+    """
+    Calcula el monto de descuento para estiba basado en una regla de tres simple.
+
+    Args:
+        cantidad (int): La cantidad de sacos cargados.
+        tipoCambio (float): El tipo de cambio para convertir el monto.
+
+    Returns:
+        float: El monto de descuento en la moneda correspondiente al tipo de cambio.
+    """
+    # Base para la regla de tres
+    referencia_cantidad = ref_base
+    referencia_descuento = 100  # Descuento en bolivianos para 560
+
+    # Si la cantidad es exactamente igual a la referencia, usa directamente el valor
+    if cantidad == referencia_cantidad:
+        monto_descuento_moneda = (referencia_descuento / tipoCambio)/3
+    else:
+        # Aplicar regla de tres simple para otras cantidades
+        total_descuento_bolivianos = (cantidad * referencia_descuento) / referencia_cantidad
+        monto_descuento_moneda = (total_descuento_bolivianos / tipoCambio)/3
+
+    return round(monto_descuento_moneda, 2)
+
+def calcular_monto_descuento_sacos_faltantes(cantidad_sacos_faltantes,precio_sacos_faltantes):
+    return round(cantidad_sacos_faltantes*precio_sacos_faltantes,2)
+
+def calcular_peso_no_considerado_por_sacos_faltante(cantidad_sacos_faltantes, peso_por_saco=None):
+    if peso_por_saco  and peso_por_saco > 0:
+        return cantidad_sacos_faltantes * peso_por_saco
+    else:
+        return cantidad_sacos_faltantes * 50
+
+def calcular_diferencia_de_peso_por_cobrar_kg(diferencia_de_peso, merma_permitida, peso_sacos_faltantes):
+    # Verificar si la diferencia de peso excede la merma permitida
+    if diferencia_de_peso > merma_permitida:
+        # Calcular la diferencia por cobrar
+        diferencia_por_cobrar = diferencia_de_peso - merma_permitida
+        # Restar el peso de los sacos faltantes si aplica
+        diferencia_por_cobrar -= peso_sacos_faltantes
+        # Asegurarnos de no devolver valores negativos
+        return max(diferencia_por_cobrar, 0)
+    else:
+        # Si no excede la merma permitida, no se cobra nada
+        return 0
+
+def calcular_costo_por_kg(flete_pactado,precio_producto,margen_financiero,gastos_nac):
+
+
+    # Cálculo del precio por tonelada
+    precio_por_tonelada = precio_producto * 1000
+
+
+
+    # Sumar flete pactado, margen financiero y gastos de nacionalización
+    precio_bruto = precio_por_tonelada + flete_pactado + margen_financiero + gastos_nac
+
+    # Calcular el IGV (18%) sobre el precio bruto
+    igv = precio_bruto * 0.18
+
+    # Calcular el precio final bruto sumando el IGV
+    precio_bruto_final = precio_bruto + igv
+
+    # calcular precio por TM
+    precio_por_tonelada_final = round(precio_bruto_final / 1.18, 2)
+
+    # Paso 2: Calcular el precio por kg
+    precio_por_kg = round(precio_bruto_final / 1000, 4)
+
+    data={
+        "precio_por_tonelada":precio_por_tonelada,
+        "precio_bruto":precio_bruto,
+        "igv":igv,
+        "precio_bruto_final":precio_bruto_final,
+        "precio_por_tonelada_final":precio_por_tonelada_final,
+        "precio_por_kg":precio_por_kg,
+    }
+    return data
 
 def procesar_data_reporte(data):
     # Obtener los datos principales
@@ -80,9 +140,12 @@ def procesar_data_reporte(data):
     total_sacos_humedos = 0
     total_sacos_mojados = 0
     total_descuento_estiba = 0.00
+    total_descuento_sacos=0.00
+    total_global_descuentos=0.00
     merma_total = 0.00
     pago_estiba_list = []
     empresa = ''
+
     fecha_numeracion=datetime.strptime(dataForm['fechaNumeracion'], '%Y-%m-%dT%H:%M:%S.%fZ').strftime('%d/%m/%Y')
     if dataForm["empresa"] == "bd_trading_starsoft":
         empresa = "TRADING SEMILLA SAC"
@@ -90,6 +153,7 @@ def procesar_data_reporte(data):
             empresa = "LA SEMILLA SEMILLA DE ORO SAC"
     elif dataForm["empresa"] == "bd_maximilian_starsoft":
             empresa = "MAXIMILIAN INVERSIONES SA"
+
     # Recorrer los datos de la tabla
     for item in dataTable:
         try:
@@ -135,32 +199,27 @@ def procesar_data_reporte(data):
     for item in pago_estiba_list:
         total_descuento_estiba += item['monto_descuento']
 
+    datos_de_costo=calcular_costo_por_kg(dataForm["fletePactado"],dataExtra["precioProd"],dataExtra["margenFinanciero"],dataExtra["gastosNacionalizacion"])
+
     # Calcular la diferencia de peso (diferencia entre salida y llegada)
     diferencia_peso_kg = suma_peso_salida_kg - suma_peso_llegada_kg
 
+    #calcula peso de sacos faltantes
+    peso_sacos_faltantes=calcular_peso_no_considerado_por_sacos_faltante(total_sacos_faltantes)
 
+    #calcula la diferencia de peso por cobrar teniendo en cuenta la merma permitida y la cantidad de sacos faltantes
+    diferencia_peso_por_cobrar = calcular_diferencia_de_peso_por_cobrar_kg(diferencia_peso_kg, dataExtra["mermaPermitida"],peso_sacos_faltantes )
 
-    # Verificar si la diferencia de peso excede la merma permitida
-    if diferencia_peso_kg > dataExtra["mermaPermitida"]:
-        diferencia_peso_por_cobrar = diferencia_peso_kg - dataExtra["mermaPermitida"]
-    else:
-        diferencia_peso_por_cobrar = None  # Si no excede la merma permitida, no se cobra
 
     # Calcular los descuentos por sacos dañados
-
     descuento_sacos_rotos = total_sacos_rotos * dataExtra["precioSacosRotos"]
     descuento_sacos_humedos = total_sacos_humedos * dataExtra["precioSacosHumedos"]
     descuento_sacos_mojados = total_sacos_mojados * dataExtra["precioSacosMojados"]
 
-    # Total de descuentos por sacos dañados
-    total_descuentos_sacos = descuento_sacos_rotos + descuento_sacos_humedos + descuento_sacos_mojados
-
     # Precio base del flete (por tonelada)
-    flete_base = dataForm["fletePactado"] * (suma_peso_salida_kg / 1000)  # Convertir kg a toneladas
+    flete_base = dataForm["fletePactado"] * (dataForm["pesoNetoCrt"] / 1000)  # Convertir kg a toneladas
 
-    # Cálculo del pago final
-    pago_final = flete_base - total_descuentos_sacos
-
+    # Cálculo del precio por tonelada
     precio_por_tonelada = dataExtra["precioProd"] * 1000
 
     # Sumar flete pactado, margen financiero y gastos de nacionalización
@@ -168,15 +227,23 @@ def procesar_data_reporte(data):
         "gastosNacionalizacion"]
 
     # Calcular el IGV (18%) sobre el precio bruto
-    igv = precio_bruto * 0.18
+    igv = datos_de_costo.get("igv")
 
     # Calcular el precio final bruto sumando el IGV
     precio_bruto_final = precio_bruto + igv
 
-    # Paso 2: Calcular el precio por kg
-    precio_por_kg = precio_bruto_final / 1000
+    # calcular precio por TM
+    precio_por_tonelada_final=round(precio_bruto_final/1.18,2)
 
-    descuento_sacos_faltantes = total_sacos_faltantes * precio_por_kg
+    # Paso 2: Calcular el precio por kg
+    precio_por_kg = round(precio_bruto_final/1000,4)
+
+    # calcular descuento por sacos faltantes
+    total_descuento_sacos_faltantes = round(peso_sacos_faltantes * precio_por_kg,2)
+
+    total_descuento_sacos = calcular_descuento_sacos(total_descuento_sacos_faltantes,descuento_sacos_rotos,descuento_sacos_humedos,descuento_sacos_mojados)
+
+    pago_final = flete_base - total_descuento_sacos
 
     # Paso 3: Calcular el descuento por diferencia de peso
     # Si la diferencia de peso por cobrar es positiva, calculamos el descuento
@@ -192,6 +259,16 @@ def procesar_data_reporte(data):
     # Si hay descuento por pago de estiba
     if total_descuento_estiba and total_descuento_estiba > 0:
         pago_final -= total_descuento_estiba
+
+    #si hay descuento por sacos faltantes:
+    if total_descuento_sacos and total_descuento_sacos > 0:
+        pago_final -=total_descuento_sacos
+
+    total_dsct= round((descuento_por_diferencia_peso +total_descuento_estiba + total_descuento_sacos_faltantes + descuento_sacos_rotos + descuento_sacos_humedos + descuento_sacos_mojados),2)
+
+    total_a_pagar= round(flete_base-total_dsct,2)
+
+    total_global_descuentos = round(total_descuento_sacos + total_descuento_estiba + descuento_por_diferencia_peso,2)
 
     data_procesada={
         "dataForm":dataForm,
@@ -211,17 +288,28 @@ def procesar_data_reporte(data):
             "diferencia_de_peso":diferencia_peso_kg ,
             "diferencia_peso_por_cobrar":diferencia_peso_por_cobrar,
             "descuento_por_diferencia_peso":descuento_por_diferencia_peso,
+            "descuento_sacos_faltantes": total_descuento_sacos_faltantes,
             "descuento_sacos_rotos": descuento_sacos_rotos,
             "descuento_sacos_humedos":descuento_sacos_humedos,
             "descuento_sacos_mojados":descuento_sacos_mojados,
-            "total_luego_dsctos_sacos":calcular_monto_por_descuentos_de_sacos(flete_base,descuento_sacos_faltantes,descuento_sacos_rotos,descuento_sacos_rotos,descuento_sacos_humedos,descuento_sacos_mojados),
+            "total_descuento_sacos":total_descuento_sacos,
+            "total_luego_dsctos_sacos":calcular_monto_luego_dsctos_sacos(flete_base,total_descuento_sacos,descuento_por_diferencia_peso),
+            "total_global_descuentos":total_global_descuentos,
+            "precio_por_tonelada":round(precio_por_tonelada,2),
+            "precio_bruto_final":round(precio_bruto_final,2),
+            "precio_por_tonelada_final": precio_por_tonelada_final,
+            "precio_por_kg_final":precio_por_kg,
+            "pago_final":round(pago_final,2),
             "pago_estiba_list": tuple(pago_estiba_list),
+            "igv":round(igv,2),
             "flete_base":round(flete_base,2),
             "empresa": empresa,
             "fecha_numeracion":fecha_numeracion,
             "len_tabla": len(dataTable),
             "len_tabla_one_more":len(dataTable)+1,
             "len_tabla_two_more": len(dataTable)+2,
+            "total_dsct":total_dsct,
+            "total_a_pagar":total_a_pagar
         }
     }
 
