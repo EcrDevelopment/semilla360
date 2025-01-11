@@ -286,6 +286,7 @@ def procesar_data_reporte(data):
             "total_descuento_estiba": total_descuento_estiba,
             "merma_total": merma_total,
             "diferencia_de_peso":diferencia_peso_kg ,
+            'descuento_peso_sacos_faltantes':peso_sacos_faltantes,
             "diferencia_peso_por_cobrar":diferencia_peso_por_cobrar,
             "descuento_por_diferencia_peso":descuento_por_diferencia_peso,
             "descuento_sacos_faltantes": total_descuento_sacos_faltantes,

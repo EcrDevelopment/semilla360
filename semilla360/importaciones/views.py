@@ -570,4 +570,33 @@ def generar_reporte_dos(request):
     else:
             return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
 
+@csrf_exempt
+def generar_reporte_tres(request):
+    if request.method == 'POST':
+        try:
+            # Datos para el reporte
+            data = json.loads(request.body)
+
+            data_procesada=procesar_data_reporte(data)
+            template_path = os.path.join(os.path.dirname(__file__), 'templates', 'importaciones/reporteFleteExtranjeroDetallado.html')
+
+            # Renderizar el HTML
+            html_content = renderizar_template(template_path, data_procesada)
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf:
+                # Llama a la función para convertir el HTML a PDF y guardarlo en el archivo temporal
+                convertir_html_a_pdf(html_content, temp_pdf.name)
+
+                # Abre el archivo temporal para enviarlo como respuesta HTTP
+                temp_pdf.seek(0)  # Asegúrate de que el puntero esté al principio del archivo
+                response = HttpResponse(temp_pdf.read(), content_type='application/pdf')
+                response['Content-Disposition'] = f'inline; filename="reporte.pdf"'
+
+                # Después de enviar el archivo, el archivo temporal se elimina automáticamente cuando termine
+                return response
+        except json.JSONDecodeError:
+            return JsonResponse({'status': 'error', 'message': 'Error al procesar JSON'}, status=400)
+    else:
+            return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
+
 

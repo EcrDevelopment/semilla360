@@ -63,18 +63,6 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         # Crear la respuesta
         response = Response(response_data)
 
-        # Establecer cookies con los tokens correctamente
-        '''
-        response.set_cookie(
-            'access_token', response_data['access'], httponly=True, secure=secure, samesite='None',
-            max_age=10, path='/'
-        )
-        response.set_cookie(
-            'refresh_token', response_data['refresh'], httponly=True, secure=secure, samesite='None',
-            max_age=60, path='/'
-        )
-        '''
-
         return response
 
 # Vista para refresh de token
