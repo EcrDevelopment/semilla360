@@ -82,7 +82,7 @@ DATABASE_ROUTERS = ['semilla360.routers.DatabaseRouter']
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'semilla360',
+        'NAME': 'sistema',
         'USER': 'root',
         'PASSWORD': '123456',
         'HOST': 'localhost',  # o la dirección de tu servidor MySQL
@@ -96,7 +96,7 @@ DATABASES = {
         'HOST': '192.168.0.201',       # IP de tu servidor SQL en red local
         'PORT': '1433',                # puerto SQL Server predeterminado
         'OPTIONS': {
-            'driver': 'ODBC Driver 17 for SQL Server',  # especifica el driver adecuado            '
+            'driver': 'ODBC Driver 17 for SQL Server',  # especifica el driver adecuado
         },
     },
     'bd_maxi_starsoft': {
@@ -107,7 +107,7 @@ DATABASES = {
         'HOST': '192.168.0.201',       # IP de tu servidor SQL en red local
         'PORT': '1433',                # puerto SQL Server predeterminado
         'OPTIONS': {
-            'driver': 'ODBC Driver 17 for SQL Server',  # especifica el driver adecuado            '
+            'driver': 'ODBC Driver 17 for SQL Server',  # especifica el driver adecuado
         },
     },
     'bd_trading_starsoft': {

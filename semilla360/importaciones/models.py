@@ -1,30 +1,6 @@
 from django.db import models
 
-
-
-class Product(models.Model):
-    nombre = models.CharField(max_length=255)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    stock = models.IntegerField()
-
-    class Meta:
-        db_table = 'producto'
-
-    def __str__(self):
-        return self.name
-
-class OrdenCompra(models.Model):
-    nombre = models.CharField(max_length=255)
-    precio = models.DecimalField(max_digits=10, decimal_places=2)
-    cantidad = models.DecimalField(max_digits=10, decimal_places=2)
-    fecha = models.DateField(auto_now_add=True)
-
-    class Meta:
-        db_table = 'orden_compra'
-
-    def __str__(self):
-        return self.nombre
-
+#TABLAS DEL SERVIDOR STARSOFT
 
 class OrdenCompraStarsoft(models.Model):
     CNUMERO = models.CharField(max_length=13, primary_key=True)
@@ -68,7 +44,6 @@ class OrdenCompraStarsoft(models.Model):
         db_table = 'IMPORD'
         managed = False  # Indicamos que Django no debería crear esta tabla
 
-
 class OrdenCompraDetStarsoft(models.Model):
     CNUMERO= models.OneToOneField(
         OrdenCompraStarsoft,  # Relación con el modelo principal
@@ -111,7 +86,6 @@ class OrdenCompraDetStarsoft(models.Model):
     CFLETE = models.DecimalField(max_digits=20, decimal_places=2, default=0)
     CSEGURO = models.DecimalField(max_digits=20, decimal_places=2, default=0)
     CETAPA = models.CharField(max_length=8, null=True, blank=True)
-    #CDESSEMB = models.CharField(max_length=100, null=True, blank=True)
     CCODCLI = models.CharField(max_length=11, null=True, blank=True)
     CDESCLI = models.CharField(max_length=100, null=True, blank=True)
     CCODMARCA = models.CharField(max_length=20, null=True, blank=True)
@@ -179,3 +153,119 @@ class Proveedor(models.Model):
 
     def __str__(self):
         return self.prvcnombre or self.prvccodigo
+
+
+#TABLAS CREADAS EN MYSQL
+
+class Empresa(models.Model):
+    nombre_empresa = models.CharField(max_length=255)
+
+    class Meta:
+        db_table = 'empresa'
+
+    def __str__(self):
+        return self.nombre_empresa
+
+
+class OrdenCompra(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE,null=True)
+    numero_oc = models.CharField(max_length=50,null=True)
+
+    class Meta:
+        db_table = 'orden_compra'
+
+    def __str__(self):
+        return f"{self.numero_oc} - {self.empresa.nombre_empresa}"
+
+
+class Producto(models.Model):
+    nombre_producto = models.CharField(max_length=255)
+    precio_producto = models.DecimalField(max_digits=10, decimal_places=3)
+
+    class Meta:
+        db_table = 'producto'
+
+    def __str__(self):
+        return self.nombre_producto
+
+
+class Proveedor_transporte(models.Model):
+    nombre_proveedor = models.CharField(max_length=255)
+
+    class Meta:
+        db_table = 'proveedor'
+
+    def __str__(self):
+        return self.nombre_proveedor
+
+
+class Transportista(models.Model):
+    nombre_transportista = models.CharField(max_length=255)
+
+    class Meta:
+        db_table = 'transportista'
+
+    def __str__(self):
+        return self.nombre_transportista
+
+
+class Despacho(models.Model):
+    ordenes_compra = models.ManyToManyField(OrdenCompra)
+    producto = models.ForeignKey(Producto, on_delete=models.CASCADE)
+    proveedor = models.ForeignKey(Proveedor_transporte, on_delete=models.CASCADE)
+    dua = models.CharField(max_length=50)
+    num_recojo = models.CharField(max_length=50, blank=True, null=True)
+    fecha_numeracion = models.DateTimeField()
+    carta_porte = models.CharField(max_length=50, blank=True, null=True)
+    num_factura = models.CharField(max_length=50)
+    transportista = models.ForeignKey(Transportista, on_delete=models.CASCADE)
+    flete_pactado = models.DecimalField(max_digits=10, decimal_places=2)
+    peso_neto_crt = models.DecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        db_table = 'despacho'
+
+    def __str__(self):
+        return f"Despacho {self.id} - {self.orden_compra.numero_oc}"
+
+
+
+class DetalleDespacho(models.Model):
+    despacho = models.ForeignKey(Despacho, on_delete=models.CASCADE)
+    sacos_cargados = models.IntegerField()
+    placa_salida = models.CharField(max_length=10)
+    peso_salida = models.DecimalField(max_digits=10, decimal_places=2)
+    placa_llegada = models.CharField(max_length=10)
+    sacos_descargados = models.IntegerField()
+    peso_llegada = models.DecimalField(max_digits=10, decimal_places=2)
+    merma = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    sacos_faltantes = models.IntegerField(blank=True, null=True)
+    sacos_rotos = models.IntegerField(blank=True, null=True)
+    sacos_humedos = models.IntegerField(blank=True, null=True)
+    sacos_mojados = models.IntegerField(blank=True, null=True)
+    pago_estiba = models.CharField(max_length=50, blank=True, null=True)
+    cant_desc = models.IntegerField(blank=True, null=True)
+
+    class Meta:
+        db_table = 'detalle_despacho'
+
+    def __str__(self):
+        return f"Detalle {self.id} - Vehículo {self.vehiculo.placa}"
+
+
+class ConfiguracionDespacho(models.Model):
+    despacho = models.ForeignKey(Despacho, on_delete=models.CASCADE)
+    merma_permitida = models.DecimalField(max_digits=10, decimal_places=2)
+    precio_prod = models.DecimalField(max_digits=10, decimal_places=3)
+    gastos_nacionalizacion = models.DecimalField(max_digits=10, decimal_places=2)
+    margen_financiero = models.DecimalField(max_digits=10, decimal_places=2)
+    precio_sacos_rotos = models.DecimalField(max_digits=10, decimal_places=2)
+    precio_sacos_humedos = models.DecimalField(max_digits=10, decimal_places=2)
+    precio_sacos_mojados = models.DecimalField(max_digits=10, decimal_places=2)
+    tipo_cambio_desc_ext = models.DecimalField(max_digits=10, decimal_places=3)
+
+    class Meta:
+        db_table = 'configuracion_despacho'
+
+    def __str__(self):
+        return f"Configuración para Despacho {self.despacho.id}"

@@ -1,9 +1,12 @@
 import math
 from datetime import datetime
+
+from django.db import connections
 from reportlab.lib.pagesizes import landscape, letter
 from io import BytesIO
 from reportlab.pdfgen import canvas
-from .models import OrdenCompraStarsoft, Proveedor
+from .models import (OrdenCompraStarsoft, Proveedor, Empresa, OrdenCompra, Producto, Proveedor_transporte, Transportista,
+    Despacho, DetalleDespacho, ConfiguracionDespacho)
 from .forms import BaseDatosForm
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
@@ -18,7 +21,9 @@ from .utils import calcular_monto_descuento_estiba,renderizar_template,convertir
 import os
 import tempfile
 
-
+def get_db_connection(base_datos):
+    connection = connections[base_datos]  # Usa la base de datos dinámica
+    return connection
 
 def extract_pdf_tables(file):
     with pdfplumber.open(file) as pdf:
@@ -214,44 +219,67 @@ def listar_importaciones(request):
 
     return render(request, 'importaciones/lista_importaciones.html', {'form': form, 'registros': registros})
 
-# Vista para buscar órdenes de importación
 @csrf_exempt
 def buscar_orden_importacion(request):
-    if request.method == 'GET':
-        base_datos = request.GET.get('base_datos')  # Base de datos seleccionada
-        termino_busqueda = request.GET.get('query')  # Término de búsqueda
+    base_datos = request.GET.get('base_datos', 'default')  # Obtén el parámetro base_datos desde la URL
+    query = request.GET.get('query', '')  # El término de búsqueda (CNUMERO)
 
-        # Valida que se haya proporcionado la base de datos y el término de búsqueda
-        if base_datos and termino_busqueda:
-            # Filtra las órdenes que coincidan con el término de búsqueda
-            registros = OrdenCompraStarsoft.objects.using(base_datos).filter(
-                CNUMERO__icontains=termino_busqueda
-            ).prefetch_related('detalles')[:5]  # Carga los detalles relacionados
+    # Verifica que los parámetros sean válidos
+    if base_datos and query:
+        try:
+            # Obtener la conexión a la base de datos
+            connection = get_db_connection(base_datos)
 
-            # Serializa las órdenes junto con sus detalles
-            resultado = []
-            for registro in registros:
-                # Extraemos la orden principal
+            # Realizar la consulta a la base de datos
+            with connection.cursor() as cursor:
+                cursor.execute(f"""
+                    SELECT TOP 5 
+                        i.CNUMERO,
+                        i.CDESARTIC,
+                        i.CCODARTIC,
+                        i.NCANTIDAD,
+                        i.CUNIDAD,
+                        i.NPREUNITA,
+                        i.NTOTVENT,
+                        o.CDESPROVE,
+                        o.CCODPROVE
+                    FROM IMPORD i
+                    INNER JOIN IMPORC o ON i.CNUMERO = o.CNUMERO
+                    WHERE i.CNUMERO LIKE %s
+                """, [f'%{query}%'])
+                resultados = cursor.fetchall()
+
+            # Serializar los resultados
+            resultado_serializado = []
+
+            for row in resultados:
+
                 orden = {
-                    'CNUMERO': registro.CNUMERO,
-                    'CDESARTIC': registro.CDESARTIC,
-                    'CCODARTIC': registro.CCODARTIC,
-                    'NCANTIDAD': registro.NCANTIDAD,
-                    'CUNIDAD': registro.CUNIDAD,
-                    'NPREUNITA': registro.NPREUNITA,
-                    'NTOTVENT': registro.NTOTVENT,
-                    'proveedor': registro.detalles.CDESPROVE,
-                    'codprovee': registro.detalles.CCODPROVE,
+                    'CNUMERO': row[0],  # Asegúrate de que el índice coincida con el esquema de tu tabla
+                    'CDESARTIC': row[1],  # Este es solo un ejemplo, ajusta según las columnas
+                    'CCODARTIC': row[2],
+                    'NCANTIDAD': row[3],
+                    'CUNIDAD': row[4],
+                    'NPREUNITA': row[5],
+                    'NTOTVENT': row[6],
+                    'proveedor': row[7],  # Ajusta según la columna correcta
+                    'codprovee': row[8],  # Ajusta según la columna correcta
                 }
+                resultado_serializado.append(orden)
 
-                #print(orden)
-                resultado.append(orden)
+            # Retornar los resultados en formato JSON
+            return JsonResponse(resultado_serializado, safe=False, status=200)
 
-            return JsonResponse(resultado, safe=False, status=200)
-        else:
-            return JsonResponse({'error': 'Parámetros inválidos'}, status=400)
+        except ValueError as e:
+            # Si hay un error con la base de datos
+            return JsonResponse({'error': str(e)}, status=500)
 
-    return JsonResponse({'error': 'Método no permitido'}, status=405)
+        except Exception as e:
+            # Manejo de errores generales
+            return JsonResponse({'error': str(e)}, status=500)
+
+    else:
+        return JsonResponse({'error': 'Parámetros inválidos'}, status=400)
 
 @csrf_exempt
 def buscar_proveedor(request):
@@ -282,264 +310,6 @@ def buscar_proveedor(request):
             return JsonResponse({'error': 'Parámetros inválidos'}, status=400)
 
     return JsonResponse({'error': 'Método no permitido'}, status=405)
-
-@csrf_exempt
-def generar_reporte(request):
-    if request.method == 'POST':
-        try:
-            # Decodificar el cuerpo de la solicitud
-            data = json.loads(request.body)
-
-            # Obtener los datos principales
-            dataForm = data.get('dataForm', {})
-            dataTable = data.get('dataTable', [])
-            dataExtra = data.get('dataExtraForm', {})
-
-            # Variables
-            suma_peso_salida_kg = 0.00
-            suma_peso_llegada_kg = 0.00
-            total_sacos_cargados=0
-            total_sacos_descargados=0
-            total_sacos_rotos = 0
-            total_sacos_humedos = 0
-            total_sacos_mojados = 0
-            total_descuento_estiba=0.00
-            merma_total=0.00
-            pago_estiba_list = []
-            empresa=''
-            if dataForm["empresa"] == "bd_trading_starsoft":
-                empresa="TRADING SEMILLA SAC"
-
-            # Recorrer los datos de la tabla
-            for item in dataTable:
-                try:
-                    suma_peso_salida_kg += float(str(item["pesoSalida"]).replace(",", ""))
-                    suma_peso_llegada_kg += float(str(item["pesoLlegada"]).replace(",", ""))
-                    total_sacos_cargados += int(str(item["sacosCargados"]))
-                    total_sacos_descargados += int(str(item["sacosDescargados"]))
-                except (ValueError, AttributeError) as e:
-                    print(f"Error procesando item: {item}, error: {e}")
-                total_sacos_rotos += int(item["sacosRotos"])  # Contar sacos rotos
-                total_sacos_humedos += int(item["sacosHumedos"])  # Contar sacos húmedos
-                total_sacos_mojados += int(item["sacosMojados"])  # Contar sacos mojado
-                # Evaluar el valor de pagoEstiba
-                # Evaluar el valor de pagoEstiba
-                pago_estiba_value = item.get("pagoEstiba")
-
-                if pago_estiba_value is None:
-                    print(f"Advertencia: El campo 'pagoEstiba' está vacío para el item {item}")
-                    continue
-
-                # Caso 1: "No pago 100 bolivianos"
-                if "No pago estiba" in pago_estiba_value:
-                    # Concatenar placaLlegada y pagoEstiba
-                    #formatted_value = f"{item['placaLlegada']} - {pago_estiba_value}"
-                    # Agregar el resultado a la lista con un valor calculado
-                    pago_estiba_list.append({
-                        "placa":{item['placaLlegada']},
-                        "detalle": pago_estiba_value,
-                        "monto_descuento": calcular_monto_descuento_estiba(item["sacosDescargados"],
-                                                                 dataExtra["tipoCambioDescExt"])
-                    })
-
-                # Caso 2: "Pago parcial"
-                elif "Pago parcial" in pago_estiba_value:
-                    pago_estiba_list.append({
-                        "placa": {item['placaLlegada']},
-                        "detalle": pago_estiba_value,
-                        "monto_descuento": calcular_monto_descuento_estiba(item["sacosDescargados"],
-                                                                           dataExtra["tipoCambioDescExt"])
-                    })
-
-            for item in pago_estiba_list:
-                total_descuento_estiba+=item['monto_descuento']
-
-            # Calcular la diferencia de peso (diferencia entre salida y llegada)
-            diferencia_peso_kg = suma_peso_salida_kg - suma_peso_llegada_kg
-
-            # Guardar la merma siempre
-            merma_total = diferencia_peso_kg
-
-            # Verificar si la diferencia de peso excede la merma permitida
-            if diferencia_peso_kg > dataExtra["mermaPermitida"]:
-                diferencia_peso_por_cobrar = diferencia_peso_kg - dataExtra["mermaPermitida"]
-            else:
-                diferencia_peso_por_cobrar = None  # Si no excede la merma permitida, no se cobra
-
-            # Calcular los descuentos por sacos dañados
-            descuento_sacos_rotos = total_sacos_rotos * dataExtra["precioSacosRotos"]
-            descuento_sacos_humedos = total_sacos_humedos * dataExtra["precioSacosHumedos"]
-            descuento_sacos_mojados = total_sacos_mojados * dataExtra["precioSacosMojados"]
-
-            # Total de descuentos por sacos dañados
-            total_descuentos_sacos = descuento_sacos_rotos + descuento_sacos_humedos + descuento_sacos_mojados
-
-            # Precio base del flete (por tonelada)
-            flete_base = dataForm["fletePactado"] * (suma_peso_salida_kg / 1000)  # Convertir kg a toneladas
-
-            # Cálculo del pago final
-            pago_final = flete_base - total_descuentos_sacos
-
-            precio_por_tonelada = dataExtra["precioProd"] * 1000
-
-            # Sumar flete pactado, margen financiero y gastos de nacionalización
-            precio_bruto = precio_por_tonelada + dataForm["fletePactado"] + dataExtra["margenFinanciero"] + dataExtra[
-                "gastosNacionalizacion"]
-
-            # Calcular el IGV (18%) sobre el precio bruto
-            igv = precio_bruto * 0.18
-
-            # Calcular el precio final bruto sumando el IGV
-            precio_bruto_final = precio_bruto + igv
-
-            # Paso 2: Calcular el precio por kg
-            precio_por_kg = precio_bruto_final / 1000
-
-            # Paso 3: Calcular el descuento por diferencia de peso
-            # Si la diferencia de peso por cobrar es positiva, calculamos el descuento
-            if diferencia_peso_por_cobrar and diferencia_peso_por_cobrar > 0:
-                descuento_por_diferencia_peso = diferencia_peso_por_cobrar * precio_por_kg
-            else:
-                descuento_por_diferencia_peso = 0  # No hay descuento si no hay diferencia de peso
-
-            # Si hay diferencia de peso por cobrar, sumamos al pago final el monto correspondiente
-            if diferencia_peso_por_cobrar and diferencia_peso_por_cobrar > 0:
-                pago_final -= descuento_por_diferencia_peso
-
-            # Si hay descuento por pago de estiba
-            if total_descuento_estiba and total_descuento_estiba > 0:
-                pago_final -= total_descuento_estiba
-
-            ''' 
-            print(f"----------------------FLETE CALCULADO-------------------")
-            print(f"Flete base: ${flete_base:.2f}")
-            print(f"Descuento por sacos rotos: {descuento_sacos_rotos}")
-            print(f"Descuento por sacos húmedos: {descuento_sacos_humedos}")
-            print(f"Descuento por sacos mojados: {descuento_sacos_mojados}")
-            print(f"Total descuento por sacos dañados: ${total_descuentos_sacos}")
-            print(f"Descuento por diferencia de peso: ${descuento_por_diferencia_peso:.2f}")
-            print(f"Descuento de estibaje: ${total_descuento_estiba:.2f}")
-            print(f"total a pagar: ${pago_final:.2f}")
-            print(f"----------------------Final del reporte -------------------")
-            '''
-
-            buffer = BytesIO()
-            pdf = canvas.Canvas(buffer, pagesize=landscape(letter))
-
-
-
-            # Agregar contenido al PDF
-            pdf.setFont("Helvetica", 10)
-            pdf.drawString(40, 595, f"{empresa}")
-            pdf.setFont("Helvetica", 11)
-            pdf.drawString(250, 580, f"{dataForm['producto']}")
-            pdf.setFont("Helvetica", 10)
-            pdf.drawString(40, 560, f"Carta Porte: {dataForm['cartaPorte']}")
-            pdf.setFont("Helvetica", 9)
-            pdf.drawString(40, 540, f"N° de DUA: {dataForm['dua']}")
-            pdf.drawString(150, 540,f"Fecha numeración: {datetime.strptime(dataForm['fechaNumeracion'], '%Y-%m-%dT%H:%M:%S.%fZ').strftime('%d/%m/%Y')}")
-            pdf.drawString(300, 540, f"Factura N°: {dataForm['numFactura']}")
-            pdf.drawString(410, 540, f"O/C: {dataForm['oc']} ({dataForm['numRecojo']})")
-            pdf.drawString(490, 540, f"Cant.: {total_sacos_cargados} sacos")
-            pdf.drawString(590, 540, f"{suma_peso_salida_kg:.2f} Kg.")
-
-            '''
-            # Crear tabla con datos de la tabla
-            data = [['Placa S.', 'Sacos C.', 'Peso S.','Placa L.','Sacos D.','Peso L.','Merma']]  # Encabezado
-            for item in dataTable:
-                data.append([item["placa"], item["sacosCargados"], item["pesoSalida"],item["placaLlegada"],item["sacosDescargados"],item["pesoLlegada"],item["merma"]])
-
-            table = Table(data)
-            table.setStyle(TableStyle([
-                ('TEXTCOLOR', (0, 0), (-1, 0), (0, 0, 0)),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 0), (-1, 0), (0.8, 0.8, 0.8)),
-                ('GRID', (0, 0), (-1, -1), 0.5, (0, 0, 0)),
-            ]))
-            table.wrapOn(pdf, 100, 100)
-            table.drawOn(pdf, 40, 410)
-            '''
-
-            # Definir el tamaño de la tabla y las columnas
-            x = 40  # Posición horizontal inicial
-            y = 510  # Posición vertical inicial
-            ancho_columna = 50  # Ancho de cada columna
-            alto_fila = 20  # Altura de cada fila
-
-            # Agregar encabezado con varias columnas combinadas
-            pdf.setFont("Helvetica-Bold", 10)
-
-            # Dibujar el encabezado combinado (4 columnas combinadas)
-            pdf.setFillColorRGB(0.8, 0.8, 0.8)  # Color de fondo gris claro
-            pdf.rect(x, y, ancho_columna * 4, alto_fila, fill=1)  # Rectángulo para las columnas combinadas
-            pdf.setFillColorRGB(0, 0, 0)  # Color de texto negro
-            pdf.drawString(x + 5, y + 5, "MERCADERIA CARGADA")  # Texto del encabezado combinado
-
-            # Dibujar el encabezado combinado (4 columnas combinadas)
-            pdf.setFillColorRGB(0.8, 0.8, 0.8)  # Color de fondo gris claro
-            pdf.rect((ancho_columna * 4) + x, y, ancho_columna * 4, alto_fila, fill=1)  # Rectángulo para las columnas combinadas
-            pdf.setFillColorRGB(0, 0, 0)  # Color de texto negro
-            pdf.drawString((ancho_columna * 4) + x + 5, y + 5, "MERCADERIA DESCARGADA")  # Texto del encabezado combinado
-
-            # Dibujar el encabezado combinado (4 columnas combinadas)
-            pdf.setFillColorRGB(0.8, 0.8, 0.8)  # Color de fondo gris claro
-            pdf.rect(((ancho_columna * 4) * 2) + x, y, ancho_columna * 4, alto_fila,
-                     fill=1)  # Rectángulo para las columnas combinadas
-            pdf.setFillColorRGB(0, 0, 0)  # Color de texto negro
-            pdf.drawString(((ancho_columna * 4) * 2) + x + 5, y + 5,"DESCUENTOS")  # Texto del encabezado combinado
-
-            # Dibujar el resto de la tabla (con celdas separadas)
-
-
-            # Filas y celdas
-            y -= alto_fila  # Moverse hacia abajo para la siguiente fila
-            #creacion de los headers
-            pdf.setFont("Helvetica-Bold", 8)
-            headers = ['N°','Placa S.', 'Sacos C.', 'Peso S.','Placa L.','Sacos D.','Peso L.','Merma',
-                       'S. Falt.','S. rotos','S. humed.','S. mojados']
-            for i, header in enumerate(headers):
-                pdf.rect(x + (i * ancho_columna), y, ancho_columna, alto_fila)  # Dibujar cada celda
-                pdf.drawString(x + (i * ancho_columna) + 5, y + 5, header)  # Escribir el texto
-
-            y -= alto_fila
-
-            pdf.setFont("Helvetica", 8)
-            for idx, row in enumerate(dataTable, start=1):  # `start=1` hace que el índice comience desde 1
-                # Convertir valores del objeto a una lista en el orden correcto
-                values = [
-                    str(idx),  # Índice secuencial que comienza en 1
-                    str(row["placa"]), str(row["sacosCargados"]), str(row["pesoSalida"]),
-                    str(row["placaLlegada"]), str(row["sacosDescargados"]), str(row["pesoLlegada"]),
-                    str(row["merma"]),str(row["sacosFaltantes"]),str(row["sacosRotos"]),
-                    str(row["sacosHumedos"]),str(row["sacosMojados"])
-                ]
-                for i,value in enumerate(values):
-                    pdf.rect(x + (i * ancho_columna), y, ancho_columna, alto_fila)
-                    pdf.drawString(x + (i * ancho_columna) + 5, y + 5, value)
-
-                y -= alto_fila
-
-
-
-                    # Guardar el archivo PDF
-            pdf.showPage()
-
-            # Finalizar el PDF
-            pdf.save()
-
-            # Configurar el buffer para su lectura
-            buffer.seek(0)
-
-            # Crear la respuesta del PDF
-            response = HttpResponse(buffer, content_type='application/pdf')
-            response['Content-Disposition'] = 'attachment; filename="reporte.pdf"'
-            return response
-        except json.JSONDecodeError:
-            return JsonResponse({'status': 'error', 'message': 'Error al procesar JSON'}, status=400)
-    else:
-                return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
 
 @csrf_exempt
 def generar_reporte_dos(request):
@@ -599,4 +369,81 @@ def generar_reporte_tres(request):
     else:
             return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
 
+
+def registrar_despacho(request):
+    if request.method == 'POST':
+        try:
+            # Parsear el JSON de la request
+            data = json.loads(request.body)
+
+            # Procesar `dataForm`
+            data_form = data['dataForm']
+            empresa, _ = Empresa.objects.get_or_create(nombre_empresa=data_form['empresa'])
+            producto, _ = Producto.objects.get_or_create(
+                nombre_producto=data_form['producto'],
+                precio_producto=data_form['precioProducto']
+            )
+            providers, _ = Proveedor_transporte.objects.get_or_create(nombre_proveedor=data_form['proveedor'])
+            transportista, _ = Transportista.objects.get_or_create(nombre_transportista=data_form['transportista'])
+
+            # Crear despacho
+            despacho = Despacho.objects.create(
+                producto=producto,
+                proveedor=providers,
+                dua=data_form['dua'],
+                num_recojo=data_form.get('numRecojo'),
+                fecha_numeracion=data_form['fechaNumeracion'],
+                carta_porte=data_form.get('cartaPorte'),
+                num_factura=data_form['numFactura'],
+                transportista=transportista,
+                flete_pactado=data_form['fletePactado'],
+                peso_neto_crt=data_form['pesoNetoCrt']
+            )
+
+            # Vincular órdenes de compra al despacho después de crearlo
+            for numero_oc in data_form['oc']:
+                orden_compra, _ = OrdenCompra.objects.get_or_create(
+                    empresa=empresa,
+                    numero_oc=numero_oc
+                )
+                despacho.ordenes_compra.add(orden_compra)
+
+                # Procesar `dataTable` para DetalleDespacho
+            for item in data['dataTable']:
+                DetalleDespacho.objects.create(
+                    despacho=despacho,
+                    placa_salida=item['placa'],
+                    sacos_cargados=item['sacosCargados'],
+                    peso_salida=item['pesoSalida'],
+                    placa_llegada=item['placaLlegada'],
+                    sacos_descargados=item['sacosDescargados'],
+                    peso_llegada=item['pesoLlegada'],
+                    merma=item['merma'],
+                    sacos_faltantes=item['sacosFaltantes'],
+                    sacos_rotos=item['sacosRotos'],
+                    sacos_humedos=item['sacosHumedos'],
+                    sacos_mojados=item['sacosMojados'],
+                    pago_estiba=item['pagoEstiba'],
+                    cant_desc=item['cantDesc']
+                )
+
+            # Procesar `dataExtraForm` para ConfiguracionDespacho
+            data_extra_form = data['dataExtraForm']
+            ConfiguracionDespacho.objects.create(
+                despacho=despacho,
+                merma_permitida=data_extra_form['mermaPermitida'],
+                precio_prod=data_extra_form['precioProd'],
+                gastos_nacionalizacion=data_extra_form['gastosNacionalizacion'],
+                margen_financiero=data_extra_form['margenFinanciero'],
+                precio_sacos_rotos=data_extra_form['precioSacosRotos'],
+                precio_sacos_humedos=data_extra_form['precioSacosHumedos'],
+                precio_sacos_mojados=data_extra_form['precioSacosMojados'],
+                tipo_cambio_desc_ext=data_extra_form['tipoCambioDescExt']
+            )
+
+            return JsonResponse({'status': 'success','message': 'Registro realizado correctamente'}, status=201)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+
+    return JsonResponse({'error': 'Método no permitido'}, status=405)
 
