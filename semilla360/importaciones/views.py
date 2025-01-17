@@ -208,7 +208,7 @@ def upload_file_excel(request):
     except Exception as e:
         return JsonResponse({"error": f"Error al procesar archivo: {str(e)}"}, status=400)
 
-# Vista para listar las importaciones
+@csrf_exempt
 def listar_importaciones(request):
     form = BaseDatosForm(request.POST or None)
     registros = None
@@ -311,7 +311,6 @@ def buscar_proveedor(request):
 
     return JsonResponse({'error': 'Método no permitido'}, status=405)
 
-@csrf_exempt
 def generar_reporte_dos(request):
     if request.method == 'POST':
         try:
@@ -340,7 +339,6 @@ def generar_reporte_dos(request):
     else:
             return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
 
-@csrf_exempt
 def generar_reporte_tres(request):
     if request.method == 'POST':
         try:
@@ -368,7 +366,6 @@ def generar_reporte_tres(request):
             return JsonResponse({'status': 'error', 'message': 'Error al procesar JSON'}, status=400)
     else:
             return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
-
 
 def registrar_despacho(request):
     if request.method == 'POST':
