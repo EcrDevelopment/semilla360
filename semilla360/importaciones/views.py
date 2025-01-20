@@ -2,10 +2,8 @@ import math
 from datetime import datetime
 
 from django.db import connections
-from reportlab.lib.pagesizes import landscape, letter
-from io import BytesIO
-from reportlab.pdfgen import canvas
-from .models import (OrdenCompraStarsoft, Proveedor, Empresa, OrdenCompra, Producto, Proveedor_transporte, Transportista,
+from django.db import IntegrityError
+from .models import (OrdenCompraStarsoft, Proveedor,OrdenCompraDespacho, Empresa, OrdenCompra, Producto, ProveedorTransporte, Transportista,
     Despacho, DetalleDespacho, ConfiguracionDespacho)
 from .forms import BaseDatosForm
 from django.shortcuts import render
@@ -255,13 +253,13 @@ def buscar_orden_importacion(request):
             for row in resultados:
 
                 orden = {
-                    'CNUMERO': row[0],  # Asegúrate de que el índice coincida con el esquema de tu tabla
-                    'CDESARTIC': row[1],  # Este es solo un ejemplo, ajusta según las columnas
-                    'CCODARTIC': row[2],
-                    'NCANTIDAD': row[3],
-                    'CUNIDAD': row[4],
-                    'NPREUNITA': row[5],
-                    'NTOTVENT': row[6],
+                    'numero_oc': row[0],  # Asegúrate de que el índice coincida con el esquema de tu tabla
+                    'producto': row[1],  # Este es solo un ejemplo, ajusta según las columnas
+                    'codigo_producto': row[2],
+                    'cantidad': row[3],
+                    'unidad_medida': row[4],
+                    'precio_unitario': row[5],
+                    'precio_total': row[6],
                     'proveedor': row[7],  # Ajusta según la columna correcta
                     'codprovee': row[8],  # Ajusta según la columna correcta
                 }
@@ -367,6 +365,7 @@ def generar_reporte_tres(request):
     else:
             return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
 
+'''
 def registrar_despacho(request):
     if request.method == 'POST':
         try:
@@ -380,7 +379,7 @@ def registrar_despacho(request):
                 nombre_producto=data_form['producto'],
                 precio_producto=data_form['precioProducto']
             )
-            providers, _ = Proveedor_transporte.objects.get_or_create(nombre_proveedor=data_form['proveedor'])
+            providers, _ = ProveedorTransporte.objects.get_or_create(nombre_proveedor=data_form['proveedor'])
             transportista, _ = Transportista.objects.get_or_create(nombre_transportista=data_form['transportista'])
 
             # Crear despacho
@@ -443,4 +442,117 @@ def registrar_despacho(request):
             return JsonResponse({'error': str(e)}, status=400)
 
     return JsonResponse({'error': 'Método no permitido'}, status=405)
+'''
+
+from django.db import transaction
+
+def registrar_despacho(request):
+    if request.method == 'POST':
+        try:
+            # Parsear el JSON de la request
+            data = json.loads(request.body)
+
+            # Procesar `dataForm`
+            data_form = data['dataForm']
+            empresa, _ = Empresa.objects.get_or_create(nombre_empresa=data_form['empresa'])
+            producto, _ = Producto.objects.get_or_create(
+                nombre_producto=data_form['producto']
+            )
+            providers, _ = ProveedorTransporte.objects.get_or_create(nombre_proveedor=data_form['proveedor'])
+            transportista, _ = Transportista.objects.get_or_create(nombre_transportista=data_form['transportista'])
+
+            # Iniciar transacción
+            with transaction.atomic():
+                # Validar combinaciones de OC y números de recojo
+                for oc_recojo in data_form.get('ocRecojos', []):
+                    numero_oc = oc_recojo['numeroOc']
+                    num_recojo = oc_recojo['numRecojo']
+
+                    # Verificar si ya existe la combinación de OC y número de recojo
+                    if OrdenCompraDespacho.objects.filter(orden_compra__numero_oc=numero_oc, num_recojo=num_recojo).exists():
+                        return JsonResponse(
+                            {'status': 'error',
+                             'message': f'La OC "{numero_oc}" con número de recojo "{num_recojo}" ya existe.'},
+                            status=400
+                        )
+
+                # Crear despacho
+                despacho = Despacho.objects.create(
+                    producto=producto,
+                    proveedor=providers,
+                    dua=data_form['dua'],
+                    fecha_numeracion=data_form['fechaNumeracion'],
+                    carta_porte=data_form.get('cartaPorte'),
+                    num_factura=data_form['numFactura'],
+                    transportista=transportista,
+                    flete_pactado=data_form['fletePactado'],
+                    peso_neto_crt=data_form['pesoNetoCrt']
+                )
+
+                # Crear relaciones de OC y números de recojo
+                for oc_recojo in data_form.get('ocRecojos', []):
+                    numero_oc = oc_recojo['numeroOc']
+                    num_recojo = oc_recojo['numRecojo']
+
+                    # Obtener o crear la orden de compra
+                    orden_compra, _ = OrdenCompra.objects.get_or_create(
+                        empresa=empresa,
+                        numero_oc=numero_oc
+                    )
+
+                    # Crear número de recojo asociado
+                    OrdenCompraDespacho.objects.create(
+                        orden_compra=orden_compra,
+                        despacho=despacho,
+                        num_recojo=num_recojo
+                    )
+
+                # Procesar `dataTable` para DetalleDespacho
+                for item in data['dataTable']:
+                    DetalleDespacho.objects.create(
+                        despacho=despacho,
+                        placa_salida=item['placa'],
+                        sacos_cargados=item['sacosCargados'],
+                        peso_salida=item['pesoSalida'],
+                        placa_llegada=item['placaLlegada'],
+                        sacos_descargados=item['sacosDescargados'],
+                        peso_llegada=item['pesoLlegada'],
+                        merma=item['merma'],
+                        sacos_faltantes=item['sacosFaltantes'],
+                        sacos_rotos=item['sacosRotos'],
+                        sacos_humedos=item['sacosHumedos'],
+                        sacos_mojados=item['sacosMojados'],
+                        pago_estiba=item['pagoEstiba'],
+                        cant_desc=item['cantDesc']
+                    )
+
+                # Procesar `dataExtraForm` para ConfiguracionDespacho
+                data_extra_form = data['dataExtraForm']
+                ConfiguracionDespacho.objects.create(
+                    despacho=despacho,
+                    merma_permitida=data_extra_form['mermaPermitida'],
+                    precio_prod=data_extra_form['precioProd'],
+                    gastos_nacionalizacion=data_extra_form['gastosNacionalizacion'],
+                    margen_financiero=data_extra_form['margenFinanciero'],
+                    precio_sacos_rotos=data_extra_form['precioSacosRotos'],
+                    precio_sacos_humedos=data_extra_form['precioSacosHumedos'],
+                    precio_sacos_mojados=data_extra_form['precioSacosMojados'],
+                    tipo_cambio_desc_ext=data_extra_form['tipoCambioDescExt']
+                )
+
+            return JsonResponse({'status': 'success', 'message': 'Registro realizado correctamente'}, status=201)
+
+        except IntegrityError as e:
+            return JsonResponse({'status': 'error', 'message': 'Error de integridad: asegúrese de que los datos sean correctos.'},
+                                status=400)
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+    return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
+
+
+
+
+
+
 

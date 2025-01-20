@@ -167,20 +167,10 @@ class Empresa(models.Model):
         return self.nombre_empresa
 
 
-class OrdenCompra(models.Model):
-    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE,null=True)
-    numero_oc = models.CharField(max_length=50,null=True)
-
-    class Meta:
-        db_table = 'orden_compra'
-
-    def __str__(self):
-        return f"{self.numero_oc} - {self.empresa.nombre_empresa}"
-
-
 class Producto(models.Model):
     nombre_producto = models.CharField(max_length=255)
-    precio_producto = models.DecimalField(max_digits=10, decimal_places=3)
+    codigo_producto = models.CharField(max_length=255)
+    proveedor_marca = models.CharField(max_length=255)
 
     class Meta:
         db_table = 'producto'
@@ -189,7 +179,21 @@ class Producto(models.Model):
         return self.nombre_producto
 
 
-class Proveedor_transporte(models.Model):
+class OrdenCompra(models.Model):
+    empresa = models.ForeignKey('Empresa', on_delete=models.CASCADE)
+    numero_oc = models.CharField(max_length=50, unique=True)
+    producto = models.ForeignKey('Producto', on_delete=models.CASCADE)
+    precio_producto = models.DecimalField(max_digits=10, decimal_places=3)  # Precio definido en la orden
+    cantidad = models.PositiveIntegerField()
+
+    class Meta:
+        db_table = 'orden_compra'
+
+    def __str__(self):
+        return self.numero_oc
+
+
+class ProveedorTransporte(models.Model):
     nombre_proveedor = models.CharField(max_length=255)
 
     class Meta:
@@ -210,24 +214,37 @@ class Transportista(models.Model):
 
 
 class Despacho(models.Model):
-    ordenes_compra = models.ManyToManyField(OrdenCompra)
-    producto = models.ForeignKey(Producto, on_delete=models.CASCADE)
-    proveedor = models.ForeignKey(Proveedor_transporte, on_delete=models.CASCADE)
+    proveedor = models.ForeignKey(ProveedorTransporte, on_delete=models.CASCADE)
     dua = models.CharField(max_length=50)
-    num_recojo = models.CharField(max_length=50, blank=True, null=True)
     fecha_numeracion = models.DateTimeField()
     carta_porte = models.CharField(max_length=50, blank=True, null=True)
     num_factura = models.CharField(max_length=50)
     transportista = models.ForeignKey(Transportista, on_delete=models.CASCADE)
     flete_pactado = models.DecimalField(max_digits=10, decimal_places=2)
     peso_neto_crt = models.DecimalField(max_digits=10, decimal_places=2)
+    ordenes_compra = models.ManyToManyField('OrdenCompra', through='OrdenCompraDespacho', related_name='despachos')
 
     class Meta:
         db_table = 'despacho'
 
     def __str__(self):
-        return f"Despacho {self.id} - {self.orden_compra.numero_oc}"
+        return f"Despacho {self.id}"
 
+
+class OrdenCompraDespacho(models.Model):
+    despacho = models.ForeignKey('Despacho', on_delete=models.CASCADE)
+    orden_compra = models.ForeignKey('OrdenCompra', on_delete=models.CASCADE)
+    cantidad_asignada = models.PositiveIntegerField()
+    numero_recojo = models.PositiveIntegerField()  # Número de recojo asociado a la orden de compra
+
+    class Meta:
+        db_table = 'orden_compra_despacho'
+        unique_together = ('orden_compra', 'numero_recojo')  # Restricción de unicidad
+        verbose_name = "Orden de Compra Despacho"
+        verbose_name_plural = "Órdenes de Compra Despachos"
+
+    def __str__(self):
+        return f"Despacho {self.despacho.id} - OC {self.orden_compra.numero_oc} - Recojo {self.numero_recojo}"
 
 
 class DetalleDespacho(models.Model):
@@ -250,7 +267,7 @@ class DetalleDespacho(models.Model):
         db_table = 'detalle_despacho'
 
     def __str__(self):
-        return f"Detalle {self.id} - Vehículo {self.vehiculo.placa}"
+        return f"Detalle {self.id} - Vehículo {self.placa_salida}"
 
 
 class ConfiguracionDespacho(models.Model):
@@ -269,3 +286,4 @@ class ConfiguracionDespacho(models.Model):
 
     def __str__(self):
         return f"Configuración para Despacho {self.despacho.id}"
+
