@@ -57,7 +57,10 @@
                     Factura N°: {{data.dataForm.numFactura}}
                 </td>
                 <td style="border:none;padding: 2px">
-                    O/C : {{data.dataForm.oc }}{{"("}}{{data.dataForm.numRecojo}}{{")"}}
+                    OC:
+                    {% for row in data.dataForm.ordenRecojo %}
+                        {{ row.oc.numero_oc }}({{ row.numeroRecojo }}){% if not loop.last %} / {% endif %}
+                    {% endfor %}
                 </td>
                 <td style="border:none;padding: 2px">
                      Cant.: {{data.procesado.total_sacos_cargados}} sacos
@@ -234,24 +237,10 @@
                         </li>
                         {% endif %}
 
-                        {% if data.procesado.descuento_sacos_rotos > 0 %}
+                        {% if data.procesado.total_descuento_solo_sacos > 0 %}
                         <li style="background-color:#ddf542;">
-                            B/V 004- &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: dscto. x sacos rots.
-                            <span style="width:100%;float:right;">$ {{data.procesado.descuento_sacos_rotos}}</span>
-                        </li>
-                        {% endif %}
-
-                        {% if data.procesado.descuento_sacos_humedos > 0 %}
-                        <li style="background-color:#ddf542;">
-                            B/V 004- &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: dscto. x sacos Hum.
-                            <span style="width:100%;float:right;">$ {{data.procesado.descuento_sacos_humedos}}</span>
-                        </li>
-                        {% endif %}
-
-                        {% if data.procesado.descuento_sacos_mojados > 0 %}
-                        <li style="background-color:#ddf542;">
-                            B/V 004- &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: dscto. x sacos Moj.
-                            <span style="width:100%;float:right;">$ {{data.procesado.descuento_sacos_mojados}}</span>
+                            B/V 004- &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: dscto. x sacos R,H,M.
+                            <span style="width:100%;float:right;">$ {{data.procesado.total_descuento_solo_sacos}}</span>
                         </li>
                         {% endif %}
 

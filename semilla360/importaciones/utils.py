@@ -38,11 +38,13 @@ def generar_pdf(template_path, output_path, data):
 
 def calcular_monto_luego_dsctos_sacos(flete_base,total_descuento_sacos,total_descuento_por_dif_peso):
     result=flete_base-(total_descuento_sacos+total_descuento_por_dif_peso)
-    print(flete_base,total_descuento_sacos,total_descuento_por_dif_peso)
     return round(result,2)
 
 def calcular_descuento_sacos(total_sacos_faltantes,total_sacos_rotos,total_sacos_humedos,total_sacos_mojados):
     return total_sacos_faltantes+total_sacos_rotos+total_sacos_humedos+total_sacos_mojados
+
+def calcular_descuento_solo_sacos(total_sacos_rotos,total_sacos_humedos,total_sacos_mojados):
+    return total_sacos_rotos+total_sacos_humedos+total_sacos_mojados
 
 def calcular_monto_descuento_estiba(ref_base,cantidad, tipoCambio):
     """
@@ -74,9 +76,9 @@ def calcular_monto_descuento_sacos_faltantes(cantidad_sacos_faltantes,precio_sac
 
 def calcular_peso_no_considerado_por_sacos_faltante(cantidad_sacos_faltantes, peso_por_saco=None):
     if peso_por_saco  and peso_por_saco > 0:
-        return cantidad_sacos_faltantes * peso_por_saco
+        return abs(cantidad_sacos_faltantes) * peso_por_saco
     else:
-        return cantidad_sacos_faltantes * 50
+        return abs(cantidad_sacos_faltantes) * 50
 
 def calcular_diferencia_de_peso_por_cobrar_kg(diferencia_de_peso, merma_permitida, peso_sacos_faltantes):
     # Verificar si la diferencia de peso excede la merma permitida
@@ -141,6 +143,7 @@ def procesar_data_reporte(data):
     total_sacos_mojados = 0
     total_descuento_estiba = 0.00
     total_descuento_sacos=0.00
+    total_descuento_solo_sacos = 0.00
     total_global_descuentos=0.00
     merma_total = 0.00
     pago_estiba_list = []
@@ -241,7 +244,11 @@ def procesar_data_reporte(data):
     # calcular descuento por sacos faltantes
     total_descuento_sacos_faltantes = round(peso_sacos_faltantes * precio_por_kg,2)
 
+
+
     total_descuento_sacos = calcular_descuento_sacos(total_descuento_sacos_faltantes,descuento_sacos_rotos,descuento_sacos_humedos,descuento_sacos_mojados)
+
+    total_descuento_solo_sacos=calcular_descuento_solo_sacos(descuento_sacos_rotos,descuento_sacos_humedos,descuento_sacos_mojados)
 
     pago_final = flete_base - total_descuento_sacos
 
@@ -264,6 +271,8 @@ def procesar_data_reporte(data):
     if total_descuento_sacos and total_descuento_sacos > 0:
         pago_final -=total_descuento_sacos
 
+    aux_descuento = descuento_por_diferencia_peso + total_descuento_sacos_faltantes + descuento_sacos_rotos + descuento_sacos_humedos + descuento_sacos_mojados
+
     total_dsct= round((descuento_por_diferencia_peso +total_descuento_estiba + total_descuento_sacos_faltantes + descuento_sacos_rotos + descuento_sacos_humedos + descuento_sacos_mojados),2)
 
     total_a_pagar= round(flete_base-total_dsct,2)
@@ -284,6 +293,7 @@ def procesar_data_reporte(data):
             "total_sacos_humedos": total_sacos_humedos,
             "total_sacos_mojados": total_sacos_mojados,
             "total_descuento_estiba": total_descuento_estiba,
+            "aux_descuento":aux_descuento,
             "merma_total": merma_total,
             "diferencia_de_peso":diferencia_peso_kg ,
             'descuento_peso_sacos_faltantes':peso_sacos_faltantes,
@@ -294,6 +304,7 @@ def procesar_data_reporte(data):
             "descuento_sacos_humedos":descuento_sacos_humedos,
             "descuento_sacos_mojados":descuento_sacos_mojados,
             "total_descuento_sacos":total_descuento_sacos,
+            "total_descuento_solo_sacos": total_descuento_solo_sacos,
             "total_luego_dsctos_sacos":calcular_monto_luego_dsctos_sacos(flete_base,total_descuento_sacos,descuento_por_diferencia_peso),
             "total_global_descuentos":total_global_descuentos,
             "precio_por_tonelada":round(precio_por_tonelada,2),

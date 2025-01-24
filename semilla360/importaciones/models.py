@@ -246,6 +246,15 @@ class OrdenCompraDespacho(models.Model):
     def __str__(self):
         return f"Despacho {self.despacho.id} - OC {self.orden_compra.numero_oc} - Recojo {self.numero_recojo}"
 
+    def save(self, *args, **kwargs):
+        # Generar un número de recojo único si no se ha proporcionado
+        if not self.numero_recojo:
+            last_recojo = OrdenCompraDespacho.objects.filter(
+                orden_compra=self.orden_compra
+            ).order_by('-numero_recojo').first()
+            self.numero_recojo = last_recojo.numero_recojo + 1 if last_recojo else 1
+        super().save(*args, **kwargs)
+
 
 class DetalleDespacho(models.Model):
     despacho = models.ForeignKey(Despacho, on_delete=models.CASCADE)
