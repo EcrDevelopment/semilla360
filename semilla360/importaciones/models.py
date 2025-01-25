@@ -159,9 +159,12 @@ class Proveedor(models.Model):
 
 class Empresa(models.Model):
     nombre_empresa = models.CharField(max_length=255)
+    fecha_de_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_de_actualizacion = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'empresa'
+
 
     def __str__(self):
         return self.nombre_empresa
@@ -171,6 +174,8 @@ class Producto(models.Model):
     nombre_producto = models.CharField(max_length=255)
     codigo_producto = models.CharField(max_length=255)
     proveedor_marca = models.CharField(max_length=255)
+    fecha_de_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_de_actualizacion = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'producto'
@@ -185,6 +190,8 @@ class OrdenCompra(models.Model):
     producto = models.ForeignKey('Producto', on_delete=models.CASCADE)
     precio_producto = models.DecimalField(max_digits=10, decimal_places=3)  # Precio definido en la orden
     cantidad = models.PositiveIntegerField()
+    fecha_de_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_de_actualizacion = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'orden_compra'
@@ -195,6 +202,8 @@ class OrdenCompra(models.Model):
 
 class ProveedorTransporte(models.Model):
     nombre_proveedor = models.CharField(max_length=255)
+    fecha_de_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_de_actualizacion = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'proveedor'
@@ -205,6 +214,8 @@ class ProveedorTransporte(models.Model):
 
 class Transportista(models.Model):
     nombre_transportista = models.CharField(max_length=255)
+    fecha_de_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_de_actualizacion = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'transportista'
@@ -223,6 +234,8 @@ class Despacho(models.Model):
     flete_pactado = models.DecimalField(max_digits=10, decimal_places=2)
     peso_neto_crt = models.DecimalField(max_digits=10, decimal_places=2)
     ordenes_compra = models.ManyToManyField('OrdenCompra', through='OrdenCompraDespacho', related_name='despachos')
+    fecha_de_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_de_actualizacion = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'despacho'
@@ -236,6 +249,8 @@ class OrdenCompraDespacho(models.Model):
     orden_compra = models.ForeignKey('OrdenCompra', on_delete=models.CASCADE)
     cantidad_asignada = models.PositiveIntegerField()
     numero_recojo = models.PositiveIntegerField()  # Número de recojo asociado a la orden de compra
+    fecha_de_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_de_actualizacion = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'orden_compra_despacho'
@@ -271,6 +286,8 @@ class DetalleDespacho(models.Model):
     sacos_mojados = models.IntegerField(blank=True, null=True)
     pago_estiba = models.CharField(max_length=50, blank=True, null=True)
     cant_desc = models.IntegerField(blank=True, null=True)
+    fecha_de_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_de_actualizacion = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'detalle_despacho'
@@ -289,6 +306,8 @@ class ConfiguracionDespacho(models.Model):
     precio_sacos_humedos = models.DecimalField(max_digits=10, decimal_places=2)
     precio_sacos_mojados = models.DecimalField(max_digits=10, decimal_places=2)
     tipo_cambio_desc_ext = models.DecimalField(max_digits=10, decimal_places=3)
+    fecha_de_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_de_actualizacion = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'configuracion_despacho'
