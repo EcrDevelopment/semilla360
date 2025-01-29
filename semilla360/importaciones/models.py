@@ -234,6 +234,7 @@ class Despacho(models.Model):
     flete_pactado = models.DecimalField(max_digits=10, decimal_places=2)
     peso_neto_crt = models.DecimalField(max_digits=10, decimal_places=2)
     ordenes_compra = models.ManyToManyField('OrdenCompra', through='OrdenCompraDespacho', related_name='despachos')
+    fecha_llegada = models.DateTimeField()
     fecha_de_creacion = models.DateTimeField(auto_now_add=True)
     fecha_de_actualizacion = models.DateTimeField(auto_now=True)
 

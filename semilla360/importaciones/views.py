@@ -4,6 +4,7 @@ from datetime import datetime
 
 from django.db import connections,IntegrityError,transaction
 from django.template.defaultfilters import length
+from reportlab.lib.styles import getSampleStyleSheet
 
 from .models import (OrdenCompraStarsoft, Proveedor,OrdenCompraDespacho, Empresa, OrdenCompra, Producto, ProveedorTransporte, Transportista,
     Despacho, DetalleDespacho, ConfiguracionDespacho)
@@ -23,7 +24,7 @@ import tempfile
 from reportlab.lib.pagesizes import landscape, A4
 from reportlab.lib import colors
 from reportlab.pdfgen import canvas
-from reportlab.platypus import Table, TableStyle
+from reportlab.platypus import Table, TableStyle, Paragraph
 from reportlab.lib.colors import Color
 
 def get_db_connection(base_datos):
@@ -457,16 +458,18 @@ def generar_reporte_base(request):
     # Datos iniciales de la tabla #1 (Titulos y subtitulos)
     data_table = [
         # Línea de títulos
-        ['FEC. INGRE.', 'EMPRESA DE TRANSP.', 'CARGA', '', '', '', 'DESCARGA', '', '', 'DESCUENTOS', '', '', '', ''],
+        ['FEC. INGRE.', 'EMPRESA DE TRANSP.', 'CARGA', '', '', '', 'DESCARGA', '', '','', 'DESCUENTOS', '', '', '', ''],
         ['', '', 'N°', 'Placa S.', 'Sacos C.', 'Peso S.', 'Placa L.', 'Sacos D.', 'Peso L.', 'Merma', 'S. Falt.',
-         'S. Rotos', 'S. Humed.', 'S. Mojad.'],
+         'S. Rotos', 'S. Humed.', 'S. Mojad.','Estibaje'],
     ]
-    # Agregamos datos dinamicamente a la tabla
+    styles = getSampleStyleSheet()
+    parrafo = Paragraph(f"<para align=center spaceb=3><b>{data['dataForm']['transportista']}</b></para>",
+                        styles["BodyText"])
     for i, row in enumerate(data['dataTable']):
         if i == 0:  # Primera fila (datos especiales)
             data_table.append([
                 f"{data['procesado']['fecha_numeracion']}",
-                f"{data['dataForm']['transportista']}",
+                parrafo,
                 str(row['numero']),
                 row['placa'],
                 str(row['sacosCargados']),
@@ -479,6 +482,7 @@ def generar_reporte_base(request):
                 str(row['sacosRotos']),
                 str(row['sacosHumedos']),
                 str(row['sacosMojados']),
+                str(row['pagoEstiba']),
             ])
         else:  # Para el resto de las filas
             data_table.append([
@@ -496,8 +500,9 @@ def generar_reporte_base(request):
                 str(row['sacosRotos']),
                 str(row['sacosHumedos']),
                 str(row['sacosMojados']),
+                str(row['pagoEstiba']),
             ])
-    # Agregamos
+    # Agregamos fila de totales
     data_table.append(
         ['', f"Flete x TM: $ {data['dataForm']['fletePactado']:.2f}", f"{data['procesado']['len_tabla']}", 'TOTAL',
          f"{data['procesado']['total_sacos_cargados']}", f"{data['procesado']['suma_peso_salida']}", 'TOTAL',
@@ -506,7 +511,7 @@ def generar_reporte_base(request):
          f"{data['procesado']['total_sacos_rotos']}", f"{data['procesado']['total_sacos_humedos']}",
          f"{data['procesado']['total_sacos_mojados']}"])
     # Ancho de columnas
-    col_widths = [60, 110, 20, 60, 40, 60, 60, 60, 40, 60, 40, 40, 40, 40, 40]
+    col_widths = [60, 110, 20, 60, 40, 60, 60, 60, 40, 60, 30, 30, 30, 30, 70]
     # Crear la tabla
     table = Table(data_table, colWidths=col_widths, rowHeights=15)
     color_rosa = Color(red=250 / 255, green=210 / 255, blue=202 / 255)
@@ -517,21 +522,22 @@ def generar_reporte_base(request):
         ('SPAN', (0, 0), (0, 1)),  # Fusionar "FEC. INGRE."
         ('SPAN', (1, 0), (1, 1)),  # Fusionar "EMPRESA DE TRANSP."
         ('SPAN', (2, 0), (5, 0)),  # Fusionar "CARGA"
-        ('SPAN', (6, 0), (8, 0)),  # Fusionar "DESCARGA"
-        ('SPAN', (9, 0), (13, 0)),  # Fusionar "DESCUENTOS"
+        ('SPAN', (6, 0), (9, 0)),  # Fusionar "DESCARGA"
+        ('SPAN', (10, 0), (14, 0)),  # Fusionar "DESCUENTOS"
         ('SPAN', (0, 2), (0, numero_filas - 1)),  # Fusionar "fecha"
         ('SPAN', (1, 2), (1, numero_filas - 2)),  # Fusionar "nombre empresa transporte"
-        ('FONTSIZE', (0, 0), (-1, -1), 7),
+        ('FONTSIZE', (0, 0), (-1, -1), 6),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),  # Centrar todo
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),  # Centrar verticalmente
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),  # Añadir cuadrícula
         ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),  # Fondo gris para los títulos
         ('BACKGROUND', (0, 1), (-1, 1), colors.lightgrey),  # Fondo gris claro para subtítulos
         ('BACKGROUND', (2, 0), (5, numero_filas), colors.yellowgreen),  # Color "CARGA"
-        ('BACKGROUND', (6, 0), (8, numero_filas),color_celeste),  # Color "DESCARGA"
-        ('BACKGROUND', (9, 0), (13, numero_filas),color_rosa),  # Fusionar "DESCUENTOS"
+        ('BACKGROUND', (6, 0), (9, numero_filas),color_celeste),  # Color "DESCARGA"
+        ('BACKGROUND', (10, 0), (14, numero_filas),color_rosa),  # Fusionar "DESCUENTOS"
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),  # Negrita en títulos
         ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),  # Negrita en subtítulos
+        #('FONTSIZE', (15, 0), (15, numero_filas - 1), 5),
     ])
     # Aplicar estilos a la tabla
     table.setStyle(table_style)
@@ -745,24 +751,6 @@ def generar_reporte_base(request):
     fifth_table.drawOn(c, second_new_x_position, current_y - fifth_table_height)
 
 
-    '''
-    #otra prueba
-    c.setLineWidth(1.5)  # Grosor del trazo
-    # Parte superior curva
-    c.arc(195, 500, 200, 510, 90, -100)  # Ajuste del arco para que sea visible
-    # Línea recta hacia abajo desde la parte superior
-    c.line(200, 505, 200, 495)
-    # Agregar la "colita" al medio desde el lado superior hacia abajo
-    c.line(205, 490, 200, 495)  # Arco pequeño para la colita
-    # Línea recta hacia abajo desde la colita
-    c.line(200, 485, 205, 490)
-    # Segunda línea recta hacia abajo desde la parte superior
-    c.line(200, 485, 200, 475)
-    # Parte inferior curva
-    c.arc(195, 470, 200, 480, 90, 90)
-    '''
-
-
     # SALTO DE LINEA PARA ESPACIO DE DESCUENTOS
     current_y = current_y - second_table_height - 20
 
@@ -834,7 +822,7 @@ def generar_reporte_base(request):
 
     return response
 
-def generar_reporte_detallado(request):
+def generar_reporte_detallado(request, styleSheet=None):
     data_unprocess = json.loads(request.body)
     data = procesar_data_reporte(data_unprocess)
     buffer = io.BytesIO()
@@ -919,16 +907,20 @@ def generar_reporte_detallado(request):
     # Datos iniciales de la tabla #1 (Titulos y subtitulos)
     data_table = [
         # Línea de títulos
-        ['FEC. INGRE.', 'EMPRESA DE TRANSP.', 'CARGA', '', '', '', 'DESCARGA', '', '', 'DESCUENTOS', '', '', '', ''],
+        ['FEC. INGRE.', 'EMPRESA DE TRANSP.', 'CARGA', '', '', '', 'DESCARGA', '', '', '', 'DESCUENTOS', '', '', '',
+         ''],
         ['', '', 'N°', 'Placa S.', 'Sacos C.', 'Peso S.', 'Placa L.', 'Sacos D.', 'Peso L.', 'Merma', 'S. Falt.',
-         'S. Rotos', 'S. Humed.', 'S. Mojad.'],
+         'S. Rotos', 'S. Humed.', 'S. Mojad.', 'Estibaje'],
     ]
     # Agregamos datos dinamicamente a la tabla
+    styles = getSampleStyleSheet()
+    parrafo = Paragraph(f"<para align=center spaceb=3><b>{data['dataForm']['transportista']}</b></para>",
+                      styles["BodyText"])
     for i, row in enumerate(data['dataTable']):
         if i == 0:  # Primera fila (datos especiales)
             data_table.append([
                 f"{data['procesado']['fecha_numeracion']}",
-                f"{data['dataForm']['transportista']}",
+                parrafo,
                 str(row['numero']),
                 row['placa'],
                 str(row['sacosCargados']),
@@ -941,6 +933,7 @@ def generar_reporte_detallado(request):
                 str(row['sacosRotos']),
                 str(row['sacosHumedos']),
                 str(row['sacosMojados']),
+                str(row['pagoEstiba']),
             ])
         else:  # Para el resto de las filas
             data_table.append([
@@ -958,6 +951,7 @@ def generar_reporte_detallado(request):
                 str(row['sacosRotos']),
                 str(row['sacosHumedos']),
                 str(row['sacosMojados']),
+                str(row['pagoEstiba']),
             ])
     # Agregamos
     data_table.append(
@@ -968,7 +962,7 @@ def generar_reporte_detallado(request):
          f"{data['procesado']['total_sacos_rotos']}", f"{data['procesado']['total_sacos_humedos']}",
          f"{data['procesado']['total_sacos_mojados']}"])
     # Ancho de columnas
-    col_widths = [60, 110, 20, 60, 40, 60, 60, 60, 40, 60, 40, 40, 40, 40, 40]
+    col_widths = [60, 110, 20, 60, 40, 60, 60, 60, 40, 60, 30, 30, 30, 30, 70]
     # Crear la tabla
     table = Table(data_table, colWidths=col_widths, rowHeights=15)
     color_rosa = Color(red=250 / 255, green=210 / 255, blue=202 / 255)
@@ -979,22 +973,25 @@ def generar_reporte_detallado(request):
         ('SPAN', (0, 0), (0, 1)),  # Fusionar "FEC. INGRE."
         ('SPAN', (1, 0), (1, 1)),  # Fusionar "EMPRESA DE TRANSP."
         ('SPAN', (2, 0), (5, 0)),  # Fusionar "CARGA"
-        ('SPAN', (6, 0), (8, 0)),  # Fusionar "DESCARGA"
-        ('SPAN', (9, 0), (13, 0)),  # Fusionar "DESCUENTOS"
+        ('SPAN', (6, 0), (9, 0)),  # Fusionar "DESCARGA"
+        ('SPAN', (10, 0), (14, 0)),  # Fusionar "DESCUENTOS"
         ('SPAN', (0, 2), (0, numero_filas - 1)),  # Fusionar "fecha"
         ('SPAN', (1, 2), (1, numero_filas - 2)),  # Fusionar "nombre empresa transporte"
-        ('FONTSIZE', (0, 0), (-1, -1), 7),
+        ('FONTSIZE', (0, 0), (-1, -1), 6),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),  # Centrar todo
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),  # Centrar verticalmente
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),  # Añadir cuadrícula
         ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),  # Fondo gris para los títulos
         ('BACKGROUND', (0, 1), (-1, 1), colors.lightgrey),  # Fondo gris claro para subtítulos
         ('BACKGROUND', (2, 0), (5, numero_filas), colors.yellowgreen),  # Color "CARGA"
-        ('BACKGROUND', (6, 0), (8, numero_filas),color_celeste),  # Color "DESCARGA"
-        ('BACKGROUND', (9, 0), (13, numero_filas),color_rosa),  # Fusionar "DESCUENTOS"
+        ('BACKGROUND', (6, 0), (9, numero_filas), color_celeste),  # Color "DESCARGA"
+        ('BACKGROUND', (10, 0), (14, numero_filas), color_rosa),  # Fusionar "DESCUENTOS"
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),  # Negrita en títulos
         ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),  # Negrita en subtítulos
+
+        # ('FONTSIZE', (15, 0), (15, numero_filas - 1), 5),
     ])
+    table_style.add('FONTSIZE', (1, 2), (1, numero_filas - 2), 5)
     # Aplicar estilos a la tabla
     table.setStyle(table_style)
     # Calcular la altura total de la tabla
@@ -1311,7 +1308,7 @@ def registrar_despacho(request):
             empresa, _ = Empresa.objects.get_or_create(nombre_empresa=data_form.get('empresa'))
             providers, _ = ProveedorTransporte.objects.get_or_create(nombre_proveedor=data_form.get('proveedor'))
             transportista, _ = Transportista.objects.get_or_create(nombre_transportista=data_form.get('transportista'))
-
+            fecha_llegada=
             # Iniciar transacción
             with transaction.atomic():
                 # Crear el Despacho
