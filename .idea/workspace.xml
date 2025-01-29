@@ -6,14 +6,8 @@
   <component name="ChangeListManager">
     <list default="true" id="98d3083e-4637-464a-a441-a15b92abec41" name="Changes" comment="backend para tablas nivel 1">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/semilla360/frontend" beforeDir="false" afterPath="$PROJECT_DIR$/semilla360/frontend" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/semilla360/frontend/src/axiosConfig.js" beforeDir="false" afterPath="$PROJECT_DIR$/semilla360/frontend/src/axiosConfig.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/semilla360/frontend/src/components/importaciones/CalculoFletesExtranjeros/CalculoFlete.js" beforeDir="false" afterPath="$PROJECT_DIR$/semilla360/frontend/src/components/importaciones/CalculoFletesExtranjeros/CalculoFlete.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/semilla360/frontend/src/components/importaciones/CalculoFletesExtranjeros/FormularioExtra.js" beforeDir="false" afterPath="$PROJECT_DIR$/semilla360/frontend/src/components/importaciones/CalculoFletesExtranjeros/FormularioExtra.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/semilla360/importaciones/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/semilla360/importaciones/models.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/semilla360/importaciones/views.py" beforeDir="false" afterPath="$PROJECT_DIR$/semilla360/importaciones/views.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/semilla360/semilla360/settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/semilla360/semilla360/settings.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/semilla360/semilla360/urls.py" beforeDir="false" afterPath="$PROJECT_DIR$/semilla360/semilla360/urls.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/semilla360/semilla360_front" beforeDir="false" afterPath="$PROJECT_DIR$/semilla360/semilla360_front" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/semilla360/semilla360_front/semilla360_front.rar" beforeDir="false" afterPath="$PROJECT_DIR$/semilla360/semilla360_front/semilla360_front.rar" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/semilla360/semilla360_front/src/axiosConfig.js" beforeDir="false" afterPath="$PROJECT_DIR$/semilla360/semilla360_front/src/axiosConfig.js" afterDir="false" />

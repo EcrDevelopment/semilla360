@@ -1308,7 +1308,7 @@ def registrar_despacho(request):
             empresa, _ = Empresa.objects.get_or_create(nombre_empresa=data_form.get('empresa'))
             providers, _ = ProveedorTransporte.objects.get_or_create(nombre_proveedor=data_form.get('proveedor'))
             transportista, _ = Transportista.objects.get_or_create(nombre_transportista=data_form.get('transportista'))
-            fecha_llegada=
+            fecha_llegada = data.get('dataExtraForm', {}).get('fechaLlegada', None)
             # Iniciar transacción
             with transaction.atomic():
                 # Crear el Despacho
@@ -1320,7 +1320,8 @@ def registrar_despacho(request):
                     num_factura=data_form.get('numFactura', ''),
                     transportista=transportista,
                     flete_pactado=data_form.get('fletePactado', 0.0),
-                    peso_neto_crt=data_form.get('pesoNetoCrt', 0.0)
+                    peso_neto_crt=data_form.get('pesoNetoCrt', 0.0),
+                    fecha_llegada=fecha_llegada
                 )
 
                 # Procesar cada orden de compra y su número de recojo
@@ -1422,8 +1423,6 @@ def registrar_despacho(request):
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
 
     return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
-
-
 
 
 
