@@ -124,40 +124,6 @@ def extract_image_text(file):
     text = pytesseract.image_to_string(img)
     return text
 
-# Vista para subir y procesar archivo
-@api_view(['POST'])
-def upload_file(request):
-    if 'file' in request.FILES:
-        file = request.FILES['file']
-        file_type = file.name.split('.')[-1].lower()
-
-        try:
-            if file_type == 'pdf':
-                tables = extract_pdf_tables(file)
-                response_data = {"tables": tables}
-            elif file_type in ['xls', 'xlsx']:
-                data = extract_excel_data(file)
-                response_data = {"data": data}
-            elif file_type in ['jpg', 'jpeg', 'png']:
-                text = extract_image_text(file)
-                response_data = {"text": text}
-            else:
-                response_data = {'message': 'Formato de archivo no soportado'}
-
-            return JsonResponse({'status': 'success', 'data': response_data}, status=200)
-
-        except Exception as e:
-            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
-
-    return JsonResponse({"error": "No se proporcionó archivo."}, status=400)
-
-leyenda_codigos = {
-    1: "Transbordo",
-    2: "Pago estiba",
-    3: "No pago estiba",
-    4: "Pago parcial",
-}
-
 @api_view(['POST'])
 def upload_file_excel(request):
     try:
@@ -209,10 +175,44 @@ def upload_file_excel(request):
         # Convertir el DataFrame en una respuesta JSON
         result = df.to_dict(orient='records')
 
-        return JsonResponse({"data": result}, status=200)
+        return JsonResponse({"status":"success","tabla": result}, status=200)
 
     except Exception as e:
-        return JsonResponse({"error": f"Error al procesar archivo: {str(e)}"}, status=400)
+        return JsonResponse({"status":"error","error": f"Error al procesar archivo: {str(e)}"}, status=400)
+
+# Vista para subir y procesar archivo
+@api_view(['POST'])
+def upload_file(request):
+    if 'file' in request.FILES:
+        file = request.FILES['file']
+        file_type = file.name.split('.')[-1].lower()
+
+        try:
+            if file_type == 'pdf':
+                tables = extract_pdf_tables(file)
+                response_data = {"tables": tables}
+            elif file_type in ['xls', 'xlsx']:
+                data = extract_excel_data(file)
+                response_data = {"data": data}
+            elif file_type in ['jpg', 'jpeg', 'png']:
+                text = extract_image_text(file)
+                response_data = {"text": text}
+            else:
+                response_data = {'message': 'Formato de archivo no soportado'}
+
+            return JsonResponse({'status': 'success', 'data': response_data}, status=200)
+
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+    return JsonResponse({"error": "No se proporcionó archivo."}, status=400)
+
+leyenda_codigos = {
+    1: "Transbordo",
+    2: "Pago estiba",
+    3: "No pago estiba",
+    4: "Pago parcial",
+}
 
 @csrf_exempt
 def listar_importaciones(request):
