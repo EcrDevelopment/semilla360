@@ -3,8 +3,12 @@ import io
 from datetime import datetime
 
 from django.db import connections,IntegrityError,transaction
+from django.db.models import Q
 from django.template.defaultfilters import length
+from django.utils.timezone import make_aware
 from reportlab.lib.styles import getSampleStyleSheet
+from requests import Response
+from rest_framework.views import APIView
 
 from .models import (OrdenCompraStarsoft, Proveedor,OrdenCompraDespacho, Empresa, OrdenCompra, Producto, ProveedorTransporte, Transportista,
     Despacho, DetalleDespacho, ConfiguracionDespacho)
@@ -1425,7 +1429,55 @@ def registrar_despacho(request):
     return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
 
 
+def listar_estiba(request):
+    if request.method != 'GET':
+        return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
 
+    try:
+        # Obtener y limpiar las fechas
+        fecha_inicio = request.GET.get('fecha_inicio').strip()
+        fecha_fin = request.GET.get('fecha_fin').strip()
+
+        # Validar formato de fecha
+        try:
+            fecha_inicio = make_aware(datetime.strptime(fecha_inicio, "%Y-%m-%d"))
+            fecha_fin = make_aware(datetime.strptime(fecha_fin, "%Y-%m-%d"))
+        except ValueError:
+            return JsonResponse({'status': 'error', 'message': 'Formato de fecha inválido. Debe ser YYYY-MM-DD.'}, status=400)
+
+        # Consulta en ORM
+        resultados = list(DetalleDespacho.objects.filter(
+            Q(pago_estiba="No pago estiba") | Q(pago_estiba="Pago parcial"),
+            Q(despacho__fecha_llegada__isnull=False) & Q(despacho__fecha_llegada__range=(fecha_inicio, fecha_fin))
+        ).select_related(
+            'despacho', 'despacho__configuraciondespacho', 'despacho__transportista'
+        ).values(
+            'id',
+            'pago_estiba',
+            'despacho__fecha_llegada',
+            'despacho__dua',
+            'placa_llegada',
+            'sacos_descargados',
+            'cant_desc',
+            'despacho__configuraciondespacho__tipo_cambio_desc_ext',
+            'despacho__transportista__nombre_transportista'
+        ))
+
+        # Agregar cálculo de `total_a_pagar`
+        for row in resultados:
+            if row['pago_estiba'] == "No pago estiba":
+                total_a_pagar = (row['sacos_descargados'] * 50 / 1000) * 4
+            elif row['pago_estiba'] == "Pago parcial":
+                total_a_pagar = (row['cant_desc'] * 50 / 1000) * 4
+            else:
+                total_a_pagar = 0  # Si no coincide con ninguna condición
+
+            row['total_a_pagar'] = f"S/ {total_a_pagar:.2f}"  # Redondear a 2 decimales
+
+        return JsonResponse({'status': 'success', 'data': resultados}, status=200)
+
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
 

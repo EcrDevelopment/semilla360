@@ -316,3 +316,4 @@ class ConfiguracionDespacho(models.Model):
     def __str__(self):
         return f"Configuración para Despacho {self.despacho.id}"
 
+
