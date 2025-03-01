@@ -4,13 +4,10 @@ from datetime import datetime
 
 from django.db import connections,IntegrityError,transaction
 from django.db.models import Q
-from django.template.defaultfilters import length
 from django.utils.timezone import make_aware
 from reportlab.lib.styles import getSampleStyleSheet
-from requests import Response
-from rest_framework.views import APIView
-
-from .models import (OrdenCompraStarsoft, Proveedor,OrdenCompraDespacho, Empresa, OrdenCompra, Producto, ProveedorTransporte, Transportista,
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from .models import (OrdenCompraStarsoft, GastosExtra,Proveedor,OrdenCompraDespacho, Empresa, OrdenCompra, Producto, ProveedorTransporte, Transportista,
     Despacho, DetalleDespacho, ConfiguracionDespacho)
 from .forms import BaseDatosForm
 from django.shortcuts import render
@@ -661,6 +658,10 @@ def generar_reporte_base(request):
         c.drawString(x_position_for_third_table + 130, y_position_for_list, f"$ {item['monto_descuento']:.2f}")  # Monto alineado a la derecha
         y_position_for_list -= 10  # Reducir la posición vertical para la próxima línea
 
+    for item in data["procesado"]["otros_gastos"]:
+        c.drawString(x_position_for_third_table, y_position_for_list, f"{item['descripcion']}")
+        c.drawString(x_position_for_third_table + 130, y_position_for_list, f"$ {item['monto']:.2f}")
+        y_position_for_list -= 10
 
     # Coordenadas para dibujar la tercera llave
     tirth_key_start_x = first_x_position_for_key
@@ -677,9 +678,10 @@ def generar_reporte_base(request):
            tirth_key_end_y + tirth_key_inclination)
     c.line(tirth_key_start_x, tirth_key_middle_y, tirth_key_start_x + tirth_key_inclination, tirth_key_middle_y)
     # Texto del descuento
+    total_decuento = data['procesado']['total_descuento_estiba']+ data['procesado']['total_otros_gastos']
     c.setFont("Helvetica-Bold", 7)
     c.drawString(tirth_key_start_x + tirth_key_inclination + 4, tirth_key_middle_y-2,
-                 f"$ {data['procesado']['total_descuento_estiba']:.2f}")
+                 f"$ {total_decuento:.2f}")
 
 
     # Escribir linea de neto a pagar
@@ -804,7 +806,7 @@ def generar_reporte_base(request):
     c.drawString(
         x_start,
         current_y - 5,
-        f"TOTAL A DESCONTAR:   $ {data['procesado']['total_dsct']:.2f}"
+        f"TOTAL A DESCONTAR:   $ {data['procesado']['tota_dsct_sin_gastos_otros']:.2f}"
     )
 
 
@@ -1409,6 +1411,16 @@ def registrar_despacho(request):
                     tipo_cambio_desc_ext=data_extra_form.get('tipoCambioDescExt', 0.0)
                 )
 
+                for item in data_extra_form.get('otrosGastos', []):
+                    print(item)
+                    GastosExtra.objects.create(
+                        despacho=despacho,
+                        descripcion=item['descripcion'],
+                        monto=item['monto']
+                    )
+
+
+
             return JsonResponse({'status': 'success', 'message': 'Registro realizado correctamente'}, status=201)
 
 
@@ -1428,7 +1440,6 @@ def registrar_despacho(request):
 
     return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
 
-
 def listar_estiba(request):
     if request.method != 'GET':
         return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
@@ -1437,6 +1448,7 @@ def listar_estiba(request):
         # Obtener y limpiar las fechas
         fecha_inicio = request.GET.get('fecha_inicio').strip()
         fecha_fin = request.GET.get('fecha_fin').strip()
+        empresa = request.GET.get('empresa')
 
         # Validar formato de fecha
         try:
@@ -1448,9 +1460,12 @@ def listar_estiba(request):
         # Consulta en ORM
         resultados = list(DetalleDespacho.objects.filter(
             Q(pago_estiba="No pago estiba") | Q(pago_estiba="Pago parcial"),
-            Q(despacho__fecha_llegada__isnull=False) & Q(despacho__fecha_llegada__range=(fecha_inicio, fecha_fin))
+            Q(despacho__fecha_llegada__isnull=False) & Q(despacho__fecha_llegada__range=(fecha_inicio, fecha_fin)),
+            Q(despacho__ordenes_compra__empresa__nombre_empresa=empresa)
         ).select_related(
-            'despacho', 'despacho__configuraciondespacho', 'despacho__transportista'
+            'despacho',
+            'despacho__configuraciondespacho',
+            'despacho__transportista'
         ).values(
             'id',
             'pago_estiba',
@@ -1460,24 +1475,123 @@ def listar_estiba(request):
             'sacos_descargados',
             'cant_desc',
             'despacho__configuraciondespacho__tipo_cambio_desc_ext',
-            'despacho__transportista__nombre_transportista'
-        ))
+            'despacho__transportista__nombre_transportista',
+            'despacho__ordenes_compra__empresa__nombre_empresa'  # Incluir el nombre de la empresa en los resultados
+        ).distinct())  # Agregar .distinct() para evitar duplicados
 
         # Agregar cálculo de `total_a_pagar`
         for row in resultados:
             if row['pago_estiba'] == "No pago estiba":
                 total_a_pagar = (row['sacos_descargados'] * 50 / 1000) * 4
+                row['sacos_pendientes_de_pago'] = row['sacos_descargados']
             elif row['pago_estiba'] == "Pago parcial":
                 total_a_pagar = (row['cant_desc'] * 50 / 1000) * 4
+                row['sacos_pendientes_de_pago'] = row['cant_desc']
             else:
                 total_a_pagar = 0  # Si no coincide con ninguna condición
 
-            row['total_a_pagar'] = f"S/ {total_a_pagar:.2f}"  # Redondear a 2 decimales
+            # Agregar siempre el total a pagar
+            row['total_a_pagar'] = f"S/ {total_a_pagar:.2f}"
 
         return JsonResponse({'status': 'success', 'data': resultados}, status=200)
 
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
+def listar_despachos(request):
+    if request.method != 'GET':
+        return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
 
+    try:
+        # Obtener parámetros de ordenación
+        sort_field = request.GET.get('sortField', 'fecha_numeracion')  # Campo por defecto
+        sort_order = request.GET.get('sortOrder', 'descend')  # Orden por defecto
+
+        # Convertir el orden a Django ORM
+        if sort_order == 'descend':
+            orden = f"-{sort_field}"  # Agregar '-' para descendente
+        else:
+            orden = f"{sort_field}"  # Sin '-' para ascendente
+
+        print(f"Ordenando por: {orden}")  # Debug en la consola del servidor
+
+        # Obtener datos con ordenamiento dinámico
+        despachos = Despacho.objects.select_related(
+            'proveedor', 'transportista'
+        ).prefetch_related(
+            'ordenes_despacho__orden_compra'  # 🔹 Usar related_name correcto
+        ).all().order_by(orden)
+
+
+        # Paginación
+        page = request.GET.get('page', 1)
+        page_size = request.GET.get('page_size', 10)
+        paginator = Paginator(despachos, page_size)
+
+        try:
+            despachos_paginados = paginator.page(page)
+        except PageNotAnInteger:
+            despachos_paginados = paginator.page(1)
+        except EmptyPage:
+            despachos_paginados = []
+
+        # Formatear respuesta
+        data = [
+            {
+                "id": despacho.id,
+                "dua": despacho.dua,
+                "fecha_numeracion": despacho.fecha_numeracion.strftime("%Y-%m-%d %H:%M:%S"),
+                "carta_porte": despacho.carta_porte,
+                "num_factura": despacho.num_factura,
+                "flete_pactado": f"$ {despacho.flete_pactado:.2}",
+                "peso_neto_crt": float(despacho.peso_neto_crt),
+                "fecha_llegada": despacho.fecha_llegada.strftime(
+                    "%Y-%m-%d %H:%M:%S") if despacho.fecha_llegada else None,
+                "proveedor_nombre": despacho.proveedor.nombre_proveedor,
+                "transportista_nombre": despacho.transportista.nombre_transportista,
+                "ordenes_compra": [
+                    {
+                        "numero_oc": oc.orden_compra.numero_oc,
+                        "producto": oc.orden_compra.producto.nombre_producto,
+                        "precio_producto": f"{oc.orden_compra.precio_producto:.3}",
+                        "cantidad": oc.orden_compra.cantidad,
+                        "numero_recojo": oc.numero_recojo,
+                        "cantidad_asignada": oc.cantidad_asignada
+                    }
+                    for oc in despacho.ordenes_despacho.all()  # 🔹 Usar related_name
+                ]
+            }
+            for despacho in despachos
+        ]
+
+        return JsonResponse({
+            'status': 'success',
+            'data': data,
+            'total_count': paginator.count,
+            'total_pages': paginator.num_pages,
+            'current_page': despachos_paginados.number if despachos_paginados else 1
+        }, status=200)
+
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+def listar_data_despacho(request):
+    try:
+        id_despacho = request.GET.get('id')
+
+        if not id_despacho:  # Si no se proporciona un ID
+            return JsonResponse({"error": "Falta el parámetro 'id'"}, status=400)
+
+        # Buscar el despacho en la BD
+        data = list(Despacho.objects.filter(id=id_despacho).values())  # Convertir QuerySet a lista
+        
+
+        if not data:  # Si la lista está vacía
+            return JsonResponse({"error": "No se encontraron datos"}, status=404)
+
+        return JsonResponse(data, safe=False)  # Retorna la lista de resultados
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
 

@@ -169,7 +169,6 @@ class Empresa(models.Model):
     def __str__(self):
         return self.nombre_empresa
 
-
 class Producto(models.Model):
     nombre_producto = models.CharField(max_length=255)
     codigo_producto = models.CharField(max_length=255)
@@ -182,7 +181,6 @@ class Producto(models.Model):
 
     def __str__(self):
         return self.nombre_producto
-
 
 class OrdenCompra(models.Model):
     empresa = models.ForeignKey('Empresa', on_delete=models.CASCADE)
@@ -199,7 +197,6 @@ class OrdenCompra(models.Model):
     def __str__(self):
         return self.numero_oc
 
-
 class ProveedorTransporte(models.Model):
     nombre_proveedor = models.CharField(max_length=255)
     fecha_de_creacion = models.DateTimeField(auto_now_add=True)
@@ -211,7 +208,6 @@ class ProveedorTransporte(models.Model):
     def __str__(self):
         return self.nombre_proveedor
 
-
 class Transportista(models.Model):
     nombre_transportista = models.CharField(max_length=255)
     fecha_de_creacion = models.DateTimeField(auto_now_add=True)
@@ -222,7 +218,6 @@ class Transportista(models.Model):
 
     def __str__(self):
         return self.nombre_transportista
-
 
 class Despacho(models.Model):
     proveedor = models.ForeignKey(ProveedorTransporte, on_delete=models.CASCADE)
@@ -243,8 +238,7 @@ class Despacho(models.Model):
 
     def __str__(self):
         return f"Despacho {self.id}"
-
-
+'''
 class OrdenCompraDespacho(models.Model):
     despacho = models.ForeignKey('Despacho', on_delete=models.CASCADE)
     orden_compra = models.ForeignKey('OrdenCompra', on_delete=models.CASCADE)
@@ -270,7 +264,26 @@ class OrdenCompraDespacho(models.Model):
             ).order_by('-numero_recojo').first()
             self.numero_recojo = last_recojo.numero_recojo + 1 if last_recojo else 1
         super().save(*args, **kwargs)
+'''
 
+class OrdenCompraDespacho(models.Model):
+    despacho = models.ForeignKey(
+        'Despacho',
+        on_delete=models.CASCADE,
+        related_name='ordenes_despacho'  # 🔹 Agregar related_name
+    )
+    orden_compra = models.ForeignKey('OrdenCompra', on_delete=models.CASCADE)
+    cantidad_asignada = models.PositiveIntegerField()
+    numero_recojo = models.PositiveIntegerField()
+    fecha_de_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_de_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'orden_compra_despacho'
+        unique_together = ('orden_compra', 'numero_recojo')
+
+    def __str__(self):
+        return f"Despacho {self.despacho.id} - OC {self.orden_compra.numero_oc} - Recojo {self.numero_recojo}"
 
 class DetalleDespacho(models.Model):
     despacho = models.ForeignKey(Despacho, on_delete=models.CASCADE)
@@ -296,7 +309,6 @@ class DetalleDespacho(models.Model):
     def __str__(self):
         return f"Detalle {self.id} - Vehículo {self.placa_salida}"
 
-
 class ConfiguracionDespacho(models.Model):
     despacho = models.ForeignKey(Despacho, on_delete=models.CASCADE)
     merma_permitida = models.DecimalField(max_digits=10, decimal_places=2)
@@ -315,5 +327,18 @@ class ConfiguracionDespacho(models.Model):
 
     def __str__(self):
         return f"Configuración para Despacho {self.despacho.id}"
+
+class GastosExtra(models.Model):
+    despacho = models.ForeignKey(Despacho, on_delete=models.CASCADE)
+    descripcion = models.CharField(max_length=255)
+    monto = models.DecimalField(max_digits=10, decimal_places=2)
+    fecha_de_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_de_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'gastos_extra'
+
+    def __str__(self):
+        return f"Gastos extra del despacho {self.despacho.id}"
 
 

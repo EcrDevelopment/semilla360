@@ -60,15 +60,13 @@ def calcular_monto_descuento_estiba(ref_base,cantidad, tipoCambio):
     # Base para la regla de tres
     referencia_cantidad = ref_base
     referencia_descuento = 100  # Descuento en bolivianos para 560
-
     # Si la cantidad es exactamente igual a la referencia, usa directamente el valor
     if cantidad == referencia_cantidad:
         monto_descuento_moneda = (referencia_descuento / tipoCambio)/3
     else:
         # Aplicar regla de tres simple para otras cantidades
-        total_descuento_bolivianos = (cantidad * referencia_descuento) / referencia_cantidad
-        monto_descuento_moneda = (total_descuento_bolivianos / tipoCambio)/3
-
+        total_descuento_bolivianos = cantidad * referencia_descuento / referencia_cantidad
+        monto_descuento_moneda = (round(total_descuento_bolivianos,2) / tipoCambio)/3
     return round(monto_descuento_moneda, 2)
 
 def calcular_monto_descuento_sacos_faltantes(cantidad_sacos_faltantes,precio_sacos_faltantes):
@@ -131,6 +129,7 @@ def procesar_data_reporte(data):
     dataForm = data.get('dataForm', {})
     dataTable = data.get('dataTable', [])
     dataExtra = data.get('dataExtraForm', {})
+    otrosGastos=dataExtra.get('otrosGastos',{})
 
     # Variables
     suma_peso_salida_kg = 0.00
@@ -145,6 +144,7 @@ def procesar_data_reporte(data):
     total_descuento_sacos=0.00
     total_descuento_solo_sacos = 0.00
     total_global_descuentos=0.00
+    otros_gastos=0.00
     merma_total = 0.00
     pago_estiba_list = []
     empresa = ''
@@ -195,8 +195,7 @@ def procesar_data_reporte(data):
             pago_estiba_list.append({
                 "placa": item['placaLlegada'],
                 "detalle": f"No pago x {item["cantDesc"]}",
-                "monto_descuento": calcular_monto_descuento_estiba(item["sacosDescargados"],item["cantDesc"],
-                                                                   dataExtra["tipoCambioDescExt"])
+                "monto_descuento": calcular_monto_descuento_estiba(item["sacosDescargados"],item["cantDesc"],dataExtra["tipoCambioDescExt"])
             })
 
     for item in pago_estiba_list:
@@ -273,7 +272,12 @@ def procesar_data_reporte(data):
 
     aux_descuento = descuento_por_diferencia_peso + total_descuento_sacos_faltantes + descuento_sacos_rotos + descuento_sacos_humedos + descuento_sacos_mojados
 
-    total_dsct= round((descuento_por_diferencia_peso +total_descuento_estiba + total_descuento_sacos_faltantes + descuento_sacos_rotos + descuento_sacos_humedos + descuento_sacos_mojados),2)
+    for item in otrosGastos:
+        otros_gastos+=item.get('monto',0.00)
+
+    tota_dsct_sin_gastos_otros=round((descuento_por_diferencia_peso + total_descuento_estiba + total_descuento_sacos_faltantes + descuento_sacos_rotos + descuento_sacos_humedos + descuento_sacos_mojados ),2)
+
+    total_dsct= round((descuento_por_diferencia_peso + total_descuento_estiba + total_descuento_sacos_faltantes + descuento_sacos_rotos + descuento_sacos_humedos + descuento_sacos_mojados + otros_gastos),2)
 
     total_a_pagar= round(flete_base-total_dsct,2)
 
@@ -304,6 +308,7 @@ def procesar_data_reporte(data):
             "descuento_sacos_humedos":descuento_sacos_humedos,
             "descuento_sacos_mojados":descuento_sacos_mojados,
             "total_descuento_sacos":total_descuento_sacos,
+            "tota_dsct_sin_gastos_otros": tota_dsct_sin_gastos_otros,
             "total_descuento_solo_sacos": total_descuento_solo_sacos,
             "total_luego_dsctos_sacos":calcular_monto_luego_dsctos_sacos(flete_base,total_descuento_sacos,descuento_por_diferencia_peso),
             "total_global_descuentos":total_global_descuentos,
@@ -313,6 +318,8 @@ def procesar_data_reporte(data):
             "precio_por_kg_final":precio_por_kg,
             "pago_final":round(pago_final,2),
             "pago_estiba_list": tuple(pago_estiba_list),
+            "otros_gastos":tuple(otrosGastos),
+            "total_otros_gastos":otros_gastos,
             "igv":round(igv,2),
             "flete_base":round(flete_base,2),
             "empresa": empresa,
