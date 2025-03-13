@@ -232,39 +232,14 @@ class Despacho(models.Model):
     fecha_llegada = models.DateTimeField(null=True)
     fecha_de_creacion = models.DateTimeField(auto_now_add=True)
     fecha_de_actualizacion = models.DateTimeField(auto_now=True)
+    archivo_pdf = models.BinaryField(blank=True, null=True)
 
     class Meta:
         db_table = 'despacho'
 
     def __str__(self):
         return f"Despacho {self.id}"
-'''
-class OrdenCompraDespacho(models.Model):
-    despacho = models.ForeignKey('Despacho', on_delete=models.CASCADE)
-    orden_compra = models.ForeignKey('OrdenCompra', on_delete=models.CASCADE)
-    cantidad_asignada = models.PositiveIntegerField()
-    numero_recojo = models.PositiveIntegerField()  # Número de recojo asociado a la orden de compra
-    fecha_de_creacion = models.DateTimeField(auto_now_add=True)
-    fecha_de_actualizacion = models.DateTimeField(auto_now=True)
 
-    class Meta:
-        db_table = 'orden_compra_despacho'
-        unique_together = ('orden_compra', 'numero_recojo')  # Restricción de unicidad
-        verbose_name = "Orden de Compra Despacho"
-        verbose_name_plural = "Órdenes de Compra Despachos"
-
-    def __str__(self):
-        return f"Despacho {self.despacho.id} - OC {self.orden_compra.numero_oc} - Recojo {self.numero_recojo}"
-
-    def save(self, *args, **kwargs):
-        # Generar un número de recojo único si no se ha proporcionado
-        if not self.numero_recojo:
-            last_recojo = OrdenCompraDespacho.objects.filter(
-                orden_compra=self.orden_compra
-            ).order_by('-numero_recojo').first()
-            self.numero_recojo = last_recojo.numero_recojo + 1 if last_recojo else 1
-        super().save(*args, **kwargs)
-'''
 
 class OrdenCompraDespacho(models.Model):
     despacho = models.ForeignKey(

@@ -1,7 +1,8 @@
 import math
 import io
 from datetime import datetime
-
+import traceback
+from django.core.files.base import ContentFile
 from django.db import connections,IntegrityError,transaction
 from django.db.models import Q
 from django.utils.timezone import make_aware
@@ -19,14 +20,21 @@ import pytesseract
 from PIL import Image
 import pdfplumber
 import json
-from .utils import renderizar_template,convertir_html_a_pdf,procesar_data_reporte
+from django.shortcuts import get_object_or_404
+from .utils import renderizar_template, convertir_html_a_pdf, procesar_data_reporte, procesar_data_bd_reporte
 import os
-import tempfile
 from reportlab.lib.pagesizes import landscape, A4
 from reportlab.lib import colors
 from reportlab.pdfgen import canvas
 from reportlab.platypus import Table, TableStyle, Paragraph
 from reportlab.lib.colors import Color
+import rarfile
+from django.conf import settings
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+
 
 def get_db_connection(base_datos):
     connection = connections[base_datos]  # Usa la base de datos dinámica
@@ -318,62 +326,6 @@ def buscar_proveedor(request):
 
     return JsonResponse({'error': 'Método no permitido'}, status=405)
 
-def generar_reporte_dos(request):
-    if request.method == 'POST':
-        try:
-            # Datos para el reporte
-            data = json.loads(request.body)
-
-            data_procesada=procesar_data_reporte(data)
-            template_path = os.path.join(os.path.dirname(__file__), 'templates', 'importaciones/reporteFletesExtranjeros.html')
-
-            # Renderizar el HTML
-            html_content = renderizar_template(template_path, data_procesada)
-
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf:
-                # Llama a la función para convertir el HTML a PDF y guardarlo en el archivo temporal
-                convertir_html_a_pdf(html_content, temp_pdf.name)
-
-                # Abre el archivo temporal para enviarlo como respuesta HTTP
-                temp_pdf.seek(0)  # Asegúrate de que el puntero esté al principio del archivo
-                response = HttpResponse(temp_pdf.read(), content_type='application/pdf')
-                response['Content-Disposition'] = f'inline; filename="reporte.pdf"'
-
-                # Después de enviar el archivo, el archivo temporal se elimina automáticamente cuando termine
-                return response
-        except json.JSONDecodeError:
-            return JsonResponse({'status': 'error', 'message': 'Error al procesar JSON'}, status=400)
-    else:
-            return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
-
-def generar_reporte_tres(request):
-    if request.method == 'POST':
-        try:
-            # Datos para el reporte
-            data = json.loads(request.body)
-
-            data_procesada=procesar_data_reporte(data)
-            template_path = os.path.join(os.path.dirname(__file__), 'templates', 'importaciones/reporteFleteExtranjeroDetallado.html')
-
-            # Renderizar el HTML
-            html_content = renderizar_template(template_path, data_procesada)
-
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf:
-                # Llama a la función para convertir el HTML a PDF y guardarlo en el archivo temporal
-                convertir_html_a_pdf(html_content, temp_pdf.name)
-
-                # Abre el archivo temporal para enviarlo como respuesta HTTP
-                temp_pdf.seek(0)  # Asegúrate de que el puntero esté al principio del archivo
-                response = HttpResponse(temp_pdf.read(), content_type='application/pdf')
-                response['Content-Disposition'] = f'inline; filename="reporte.pdf"'
-
-                # Después de enviar el archivo, el archivo temporal se elimina automáticamente cuando termine
-                return response
-        except json.JSONDecodeError:
-            return JsonResponse({'status': 'error', 'message': 'Error al procesar JSON'}, status=400)
-    else:
-            return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
-
 def generar_reporte_base(request):
     data_unprocess = json.loads(request.body)
     data = procesar_data_reporte(data_unprocess)
@@ -381,13 +333,10 @@ def generar_reporte_base(request):
 
     # Crear un archivo PDF
     c = canvas.Canvas(buffer, pagesize=landscape(A4))
-    c.setTitle(" Reporte cálculo de flete")
-
+    c.setTitle(" Reporte cálculo de flete detallado")
 
     # Obtener las dimensiones de la página
     width, height = landscape(A4)
-
-
 
     # primera linea
     c.setFont("Helvetica", 10)
@@ -395,25 +344,23 @@ def generar_reporte_base(request):
     c.drawString(40, current_y, f"{data['procesado']['empresa']}")
 
     current_datetime = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    c.setFont("Helvetica",7)
-    c.drawString(width-130, current_y, f"{current_datetime}")
+    c.setFont("Helvetica", 7)
+    c.drawString(width - 130, current_y, f"{current_datetime}")
 
-    #segunda linea
+    # segunda linea
     c.setFont("Helvetica-Bold", 10)
     texto = f"{data['dataForm']['producto']}"
     text_width = c.stringWidth(texto, "Helvetica", 12)
     # Calcular la posición X para centrar el texto
     x_position = (width - text_width) / 2 + 20
     # Dibujar el texto centrado
-    current_y-=20
+    current_y -= 20
     c.drawString(x_position, current_y, texto)
 
     # tercera linea
     current_y -= 20
     c.setFont("Helvetica-Bold", 10)
     c.drawString(40, current_y, f"CARTA PORTE: {data['dataForm']['cartaPorte']}")
-
-
 
     # CUARTA LINEA DATOS DEL DESPACHO
     ordenes_recojo = data['dataForm']['ordenRecojo']
@@ -452,17 +399,17 @@ def generar_reporte_base(request):
         if x_position > width:
             break
 
-
-
-    #QUINTA LINEA DONDE INICIA LA TABLA:
+    # QUINTA LINEA DONDE INICIA LA TABLA:
     current_y -= 20
     # Datos iniciales de la tabla #1 (Titulos y subtitulos)
     data_table = [
         # Línea de títulos
-        ['FEC. INGRE.', 'EMPRESA DE TRANSP.', 'CARGA', '', '', '', 'DESCARGA', '', '','', 'DESCUENTOS', '', '', '', ''],
+        ['FEC. INGRE.', 'EMPRESA DE TRANSP.', 'CARGA', '', '', '', 'DESCARGA', '', '', '', 'DESCUENTOS', '', '', '',
+         ''],
         ['', '', 'N°', 'Placa S.', 'Sacos C.', 'Peso S.', 'Placa L.', 'Sacos D.', 'Peso L.', 'Merma', 'S. Falt.',
-         'S. Rotos', 'S. Humed.', 'S. Mojad.','Estibaje'],
+         'S. Rotos', 'S. Humed.', 'S. Mojad.', 'Estibaje'],
     ]
+    # Agregamos datos dinamicamente a la tabla
     styles = getSampleStyleSheet()
     parrafo = Paragraph(f"<para align=center spaceb=3><b>{data['dataForm']['transportista']}</b></para>",
                         styles["BodyText"])
@@ -503,7 +450,7 @@ def generar_reporte_base(request):
                 str(row['sacosMojados']),
                 str(row['pagoEstiba']),
             ])
-    # Agregamos fila de totales
+    # Agregamos
     data_table.append(
         ['', f"Flete x TM: $ {data['dataForm']['fletePactado']:.2f}", f"{data['procesado']['len_tabla']}", 'TOTAL',
          f"{data['procesado']['total_sacos_cargados']}", f"{data['procesado']['suma_peso_salida']}", 'TOTAL',
@@ -534,32 +481,34 @@ def generar_reporte_base(request):
         ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),  # Fondo gris para los títulos
         ('BACKGROUND', (0, 1), (-1, 1), colors.lightgrey),  # Fondo gris claro para subtítulos
         ('BACKGROUND', (2, 0), (5, numero_filas), colors.yellowgreen),  # Color "CARGA"
-        ('BACKGROUND', (6, 0), (9, numero_filas),color_celeste),  # Color "DESCARGA"
-        ('BACKGROUND', (10, 0), (14, numero_filas),color_rosa),  # Fusionar "DESCUENTOS"
+        ('BACKGROUND', (6, 0), (9, numero_filas), color_celeste),  # Color "DESCARGA"
+        ('BACKGROUND', (10, 0), (14, numero_filas), color_rosa),  # Fusionar "DESCUENTOS"
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),  # Negrita en títulos
         ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),  # Negrita en subtítulos
-        #('FONTSIZE', (15, 0), (15, numero_filas - 1), 5),
+
+        # ('FONTSIZE', (15, 0), (15, numero_filas - 1), 5),
     ])
+    table_style.add('FONTSIZE', (1, 2), (1, numero_filas - 2), 5)
     # Aplicar estilos a la tabla
     table.setStyle(table_style)
     # Calcular la altura total de la tabla
-    table_height = len(data_table) * 15 # 20 es la altura de cada fila
+    table_height = len(data_table) * 15  # 20 es la altura de cada fila
     # Calcular la posición de la tabla en la página
     table.wrapOn(c, width, height)
-    table.drawOn(c, 40, current_y - table_height )  # Ajustar la posición dependiendo de la cantidad de filas
+    table.drawOn(c, 40, current_y - table_height)  # Ajustar la posición dependiendo de la cantidad de filas
 
-    current_y= current_y - table_height - 20
+    current_y = current_y - table_height - 20
 
     # Data para la tabla #2 (Detalles de pesos)
-    second_data_table=[
-        ["Faltante peso Sta. Cruz - Desaguadero:",f"{data['procesado']['diferencia_de_peso']:.2f} Kg."],
-        ["Merma permitida:",f"{data['dataExtra']['mermaPermitida']:.2f} Kg."],
-        ["Desc. diferencia de peso:",f"{data['procesado']['diferencia_peso_por_cobrar']:.2f} Kg."],
-        ["Desc. sacos falantes:",f"{data['procesado']['descuento_peso_sacos_faltantes']:.2f} Kg."]
+    second_data_table = [
+        ["Faltante peso Sta. Cruz - Desaguadero:", f"{data['procesado']['diferencia_de_peso']:.2f} Kg."],
+        ["Merma permitida:", f"{data['dataExtra']['mermaPermitida']:.2f} Kg."],
+        ["Desc. diferencia de peso:", f"{data['procesado']['diferencia_peso_por_cobrar']:.2f} Kg."],
+        ["Desc. sacos falantes:", f"{data['procesado']['descuento_peso_sacos_faltantes']:.2f} Kg."]
     ]
-    second_col_widths=[110,50]
-    second_table = Table(second_data_table, colWidths=second_col_widths,rowHeights=14)
-    second_table_style=TableStyle([
+    second_col_widths = [110, 50]
+    second_table = Table(second_data_table, colWidths=second_col_widths, rowHeights=14)
+    second_table_style = TableStyle([
         ('FONTSIZE', (0, 0), (-1, -1), 6),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),  # Centrar
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),  # Centrar verticalmente
@@ -569,12 +518,11 @@ def generar_reporte_base(request):
     second_table.setStyle(second_table_style)
     second_table_height = len(second_data_table) * 14
     second_table.wrapOn(c, width, height)
-    second_table.drawOn(c, 40,current_y - second_table_height )
+    second_table.drawOn(c, 40, current_y - second_table_height)
 
-
-    #Data para la tabla #3 (Resumen de descuentos)
-    third_data_table=[
-        ["FLETE",f"$ {data["procesado"]["flete_base"]:.2f}"],
+    # Data para la tabla #3 (Resumen de descuentos)
+    third_data_table = [
+        ["FLETE", f"$ {data["procesado"]["flete_base"]:.2f}"],
         ["Dscto. por dif. de peso", f"$ {data["procesado"]["descuento_por_diferencia_peso"]:.2f}"],
         ["Dscto. por sacos faltantes", f"$ {data["procesado"]["descuento_sacos_faltantes"]:.2f}"],
         ["Dscto. por sacos rotos", f"$ {data["procesado"]["descuento_sacos_rotos"]:.2f}"],
@@ -582,8 +530,8 @@ def generar_reporte_base(request):
         ["Dscto. por sacos mojados", f"$ {data["procesado"]["descuento_sacos_mojados"]:.2f}"],
         ["FLETE TOTAL", f"$ {data["procesado"]["total_luego_dsctos_sacos"]:.2f}"],
     ]
-    #posicion en x para la tercera tabla:
-    x_position_for_third_table=260
+    # posicion en x para la tercera tabla:
+    x_position_for_third_table = 260
     third_col_widths = [110, 40]
     third_table = Table(third_data_table, colWidths=third_col_widths, rowHeights=14)
     third_table_style = TableStyle([
@@ -596,42 +544,44 @@ def generar_reporte_base(request):
     third_table.setStyle(third_table_style)
     third_table_height = len(third_data_table) * 14
     third_table.wrapOn(c, width, height)
-    third_table.drawOn(c, x_position_for_third_table, current_y - third_table_height )
+    third_table.drawOn(c, x_position_for_third_table, current_y - third_table_height)
 
-    #PARA VALIDACION DEL VALOR CRT
-    peso_total_toneladas=data['dataForm']['pesoNetoCrt']/1000
-    flete_pactado= data["dataForm"]["fletePactado"]
-    monto_flete = round((peso_total_toneladas * flete_pactado),2)
-    flete_base=data["procesado"]["flete_base"]
-    estado_crt=""
-    if(flete_base <= monto_flete):
-        estado_crt="NO SOBREPASA VALOR CRT"
+    # PARA VALIDACION DEL VALOR CRT
+    peso_total_toneladas = data['dataForm']['pesoNetoCrt'] / 1000
+    flete_pactado = data["dataForm"]["fletePactado"]
+    monto_flete = round((peso_total_toneladas * flete_pactado), 2)
+    flete_base = data["procesado"]["flete_base"]
+    estado_crt = ""
+    if (flete_base <= monto_flete):
+        estado_crt = "NO SOBREPASA VALOR CRT"
     else:
-        estado_crt="SOBREPASA VALOR CRT"
+        estado_crt = "SOBREPASA VALOR CRT"
     c.setFont("Helvetica-Bold", 7)
-    c.drawString(x_position_for_third_table + 150 +10 , current_y-8,estado_crt)
-
-
+    c.drawString(x_position_for_third_table + 150 + 10, current_y - 8, estado_crt)
 
     # Primera LLave para descuento sacos RMH
     c.setLineWidth(0.5)
-    first_x_position_for_key = x_position_for_third_table + 150 +10
+    first_x_position_for_key = x_position_for_third_table + 150 + 10
     first_key_y_position = current_y - (14 * 3)
-    last_key_y_position=first_key_y_position - (14 * 3)
-    middle_of_key= (first_key_y_position + last_key_y_position)/2
-    inclinacion=2
-    c.line(first_x_position_for_key, first_key_y_position-inclinacion, first_x_position_for_key, last_key_y_position+inclinacion)
-    c.line(first_x_position_for_key, first_key_y_position-inclinacion, first_x_position_for_key-inclinacion, first_key_y_position)
-    c.line(first_x_position_for_key-inclinacion, last_key_y_position , first_x_position_for_key , last_key_y_position+inclinacion)
-    c.line(first_x_position_for_key, middle_of_key, first_x_position_for_key+inclinacion,middle_of_key)
+    last_key_y_position = first_key_y_position - (14 * 3)
+    middle_of_key = (first_key_y_position + last_key_y_position) / 2
+    inclinacion = 2
+    c.line(first_x_position_for_key, first_key_y_position - inclinacion, first_x_position_for_key,
+           last_key_y_position + inclinacion)
+    c.line(first_x_position_for_key, first_key_y_position - inclinacion, first_x_position_for_key - inclinacion,
+           first_key_y_position)
+    c.line(first_x_position_for_key - inclinacion, last_key_y_position, first_x_position_for_key,
+           last_key_y_position + inclinacion)
+    c.line(first_x_position_for_key, middle_of_key, first_x_position_for_key + inclinacion, middle_of_key)
     c.setFont("Helvetica-Bold", 7)
-    c.drawString(first_x_position_for_key+inclinacion+4,middle_of_key , f"$ {data['procesado']['total_descuento_solo_sacos']:.2f}")
+    c.drawString(first_x_position_for_key + inclinacion + 4, middle_of_key,
+                 f"$ {data['procesado']['total_descuento_solo_sacos']:.2f}")
 
     # Segunda llave para descuento de sacos RMH
     c.setLineWidth(0.5)
 
     # Coordenadas para dibujar segunda la llave
-    key_start_x = first_x_position_for_key+inclinacion+4 + 40
+    key_start_x = first_x_position_for_key + inclinacion + 4 + 40
     key_start_y = current_y - 14
     key_end_y = key_start_y - (14 * 5)
     key_middle_y = (key_start_y + key_end_y) / 2
@@ -648,25 +598,21 @@ def generar_reporte_base(request):
     c.drawString(key_start_x + key_inclination + 4, key_middle_y,
                  f"$ {data['procesado']['aux_descuento']:.2f}")
 
-
     # Lista de placas y estado de estiba:
-    y_position_for_list=current_y-third_table_height-10
+    y_position_for_list = current_y - third_table_height - 10
     c.setFont("Helvetica", 6)
     for item in data["procesado"]["pago_estiba_list"]:
         # Crear texto en una línea
-        c.drawString(x_position_for_third_table, y_position_for_list, f"{item['placa']} {item['detalle']}")  # Placa y detalle
-        c.drawString(x_position_for_third_table + 130, y_position_for_list, f"$ {item['monto_descuento']:.2f}")  # Monto alineado a la derecha
+        c.drawString(x_position_for_third_table, y_position_for_list,
+                     f"{item['placa']} {item['detalle']}")  # Placa y detalle
+        c.drawString(x_position_for_third_table + 130, y_position_for_list,
+                     f"$ {item['monto_descuento']:.2f}")  # Monto alineado a la derecha
         y_position_for_list -= 10  # Reducir la posición vertical para la próxima línea
-
-    for item in data["procesado"]["otros_gastos"]:
-        c.drawString(x_position_for_third_table, y_position_for_list, f"{item['descripcion']}")
-        c.drawString(x_position_for_third_table + 130, y_position_for_list, f"$ {item['monto']:.2f}")
-        y_position_for_list -= 10
 
     # Coordenadas para dibujar la tercera llave
     tirth_key_start_x = first_x_position_for_key
-    tirth_key_start_y = current_y-third_table_height-5
-    tirth_key_end_y = y_position_for_list +10
+    tirth_key_start_y = current_y - third_table_height - 5
+    tirth_key_end_y = y_position_for_list + 10
     tirth_key_middle_y = (tirth_key_start_y + tirth_key_end_y) / 2
     tirth_key_inclination = 2
     # Dibujar la tercera llave
@@ -678,11 +624,9 @@ def generar_reporte_base(request):
            tirth_key_end_y + tirth_key_inclination)
     c.line(tirth_key_start_x, tirth_key_middle_y, tirth_key_start_x + tirth_key_inclination, tirth_key_middle_y)
     # Texto del descuento
-    total_decuento = data['procesado']['total_descuento_estiba']+ data['procesado']['total_otros_gastos']
     c.setFont("Helvetica-Bold", 7)
-    c.drawString(tirth_key_start_x + tirth_key_inclination + 4, tirth_key_middle_y-2,
-                 f"$ {total_decuento:.2f}")
-
+    c.drawString(tirth_key_start_x + tirth_key_inclination + 4, tirth_key_middle_y - 2,
+                 f"$ {data['procesado']['total_descuento_estiba']:.2f}")
 
     # Escribir linea de neto a pagar
     table_total_data = [
@@ -697,17 +641,17 @@ def generar_reporte_base(request):
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),  # Alineación izquierda primera columna
         ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),  # Fuente en negrita
         ('FONTSIZE', (0, 0), (-1, -1), 8),  # Tamaño de la fuente
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'), # Alineación derecha segunda columna
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),  # Alineación derecha segunda columna
     ]))
-    altura_tabla_total=len(table_total_data) * 14
+    altura_tabla_total = len(table_total_data) * 14
     table_total.wrapOn(c, width, height)
-    table_total.drawOn(c, x_position_for_third_table, y_position_for_list - altura_tabla_total-20)
+    table_total.drawOn(c, x_position_for_third_table, y_position_for_list - altura_tabla_total - 20)
 
 
 
     # Data para la tabla #4 (resumen de descuentos)
     new_x_position = 260 + 150 + 150
-    fourth_data_table=[
+    fourth_data_table = [
         ["FLETE", f"$ {data["procesado"]["flete_base"]:.2f}"],
         ["Dscto.", f"$ {data["procesado"]["total_dsct"]:.2f}"],
         ["Neto.", f"$ {data["procesado"]["total_a_pagar"]:.2f}"],
@@ -724,16 +668,16 @@ def generar_reporte_base(request):
     fourth_table.setStyle(fourth_table_style)
     fourth_table_height = len(fourth_data_table) * 14
     fourth_table.wrapOn(c, width, height)
-    fourth_table.drawOn(c, new_x_position, current_y - fourth_table_height - (14*3))
+    fourth_table.drawOn(c, new_x_position, current_y - fourth_table_height - (14 * 3))
     c.setFont("Helvetica-Bold", 7)
     c.drawString(new_x_position, current_y - fourth_table_height + 5, "RESUMEN")
 
     # Data para la tabla #5 (determinacion de costos)
     second_new_x_position = new_x_position + 120
     c.setFont("Helvetica-Bold", 6)
-    c.drawString(second_new_x_position, current_y+5, "Determinacion de costo x Kg.")
-    fifth_data_table=[
-        ["C.P",f"{data["procesado"]["precio_por_tonelada"]:.2f}"],
+    c.drawString(second_new_x_position, current_y + 5, "Determinacion de costo x Kg.")
+    fifth_data_table = [
+        ["C.P", f"{data["procesado"]["precio_por_tonelada"]:.2f}"],
         ["F.B", f"$ {data["dataForm"]["fletePactado"]:.2f}"],
         ["G.N", f"{data["dataExtra"]["gastosNacionalizacion"]}"],
         ["MF CIA", f"{data["dataExtra"]["margenFinanciero"]}"],
@@ -756,10 +700,8 @@ def generar_reporte_base(request):
     fifth_table.wrapOn(c, width, height)
     fifth_table.drawOn(c, second_new_x_position, current_y - fifth_table_height)
 
-
     # SALTO DE LINEA PARA ESPACIO DE DESCUENTOS
     current_y = current_y - second_table_height - 20
-
     x_start = 40  # Eje X constante
     line_height = 10  # Interlineado
     # Escribir título
@@ -806,12 +748,8 @@ def generar_reporte_base(request):
     c.drawString(
         x_start,
         current_y - 5,
-        f"TOTAL A DESCONTAR:   $ {data['procesado']['tota_dsct_sin_gastos_otros']:.2f}"
+        f"TOTAL A DESCONTAR:   $ {data['procesado']['total_dsct']:.2f}"
     )
-
-
-
-
 
     # Guardar el PDF en el buffer
     c.showPage()
@@ -1308,7 +1246,7 @@ def registrar_despacho(request):
         try:
             # Parsear el JSON de la request
             data = json.loads(request.body)
-
+            data_procesado = procesar_data_reporte(data)
             # Procesar `dataForm`
             data_form = data.get('dataForm', {})
             empresa, _ = Empresa.objects.get_or_create(nombre_empresa=data_form.get('empresa'))
@@ -1329,6 +1267,15 @@ def registrar_despacho(request):
                     peso_neto_crt=data_form.get('pesoNetoCrt', 0.0),
                     fecha_llegada=fecha_llegada
                 )
+
+                pdf_bytes = generar_reporte_pdf(data_procesado)
+                # Luego, asignarlo al campo FileField de tu modelo
+                despacho.archivo_pdf = pdf_bytes
+                # Guardar el modelo
+                despacho.save()
+
+
+
 
                 # Procesar cada orden de compra y su número de recojo
                 for orden_recojo in data_form.get('ordenRecojo', []):
@@ -1412,14 +1359,12 @@ def registrar_despacho(request):
                 )
 
                 for item in data_extra_form.get('otrosGastos', []):
-                    print(item)
+                    #(item)
                     GastosExtra.objects.create(
                         despacho=despacho,
                         descripcion=item['descripcion'],
                         monto=item['monto']
                     )
-
-
 
             return JsonResponse({'status': 'success', 'message': 'Registro realizado correctamente'}, status=201)
 
@@ -1427,16 +1372,14 @@ def registrar_despacho(request):
         except IntegrityError as e:
 
             return JsonResponse({
-
                 'status': 'error',
-
                 'message': f'Error de integridad: {str(e)}. Asegúrese de que los datos sean correctos.'
-
             }, status=400)
         except ValueError as ve:
-            return JsonResponse({'status': 'error', 'message': str(ve)}, status=400)
+            return JsonResponse({'status': 'error', 'message1': str(ve)}, status=400)
         except Exception as e:
-            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+            error_trace = traceback.format_exc()
+            return JsonResponse({'status': 'error', 'message2': str(e), 'trace': error_trace}, status=400)
 
     return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
 
@@ -1575,7 +1518,6 @@ def listar_despachos(request):
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
-
 def listar_data_despacho(request):
     try:
         id_despacho = request.GET.get('id')
@@ -1584,14 +1526,535 @@ def listar_data_despacho(request):
             return JsonResponse({"error": "Falta el parámetro 'id'"}, status=400)
 
         # Buscar el despacho en la BD
-        data = list(Despacho.objects.filter(id=id_despacho).values())  # Convertir QuerySet a lista
-        
+        data = Despacho.objects.filter(id=id_despacho)  # Convertir QuerySet a lista
+        #serializer=DespachoSerializer(data,many=True)
+        #json_data=serializer.data
+        #data_process=procesar_data_bd_reporte(json_data)
 
         if not data:  # Si la lista está vacía
             return JsonResponse({"error": "No se encontraron datos"}, status=404)
 
-        return JsonResponse(data, safe=False)  # Retorna la lista de resultados
+        return JsonResponse({"status":"success","data":data},safe=False)  # Retorna la lista de resultados
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+def generar_reporte_pdf(data):
+    buffer = io.BytesIO()  # Crear un buffer en memoria
+
+    # Crear el PDF
+    c = canvas.Canvas(buffer, pagesize=landscape(A4))
+
+    c.setTitle(" Reporte cálculo de flete")
+
+    # Obtener las dimensiones de la página
+    width, height = landscape(A4)
+
+    # primera linea
+    c.setFont("Helvetica", 10)
+    current_y = height - 40
+    c.drawString(40, current_y, f"{data['procesado']['empresa']}")
+
+    current_datetime = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    c.setFont("Helvetica", 7)
+    c.drawString(width - 130, current_y, f"{current_datetime}")
+
+    # segunda linea
+    c.setFont("Helvetica-Bold", 10)
+    texto = f"{data['dataForm']['producto']}"
+    text_width = c.stringWidth(texto, "Helvetica", 12)
+    # Calcular la posición X para centrar el texto
+    x_position = (width - text_width) / 2 + 20
+    # Dibujar el texto centrado
+    current_y -= 20
+    c.drawString(x_position, current_y, texto)
+
+    # tercera linea
+    current_y -= 20
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(40, current_y, f"CARTA PORTE: {data['dataForm']['cartaPorte']}")
+
+    # CUARTA LINEA DATOS DEL DESPACHO
+    ordenes_recojo = data['dataForm']['ordenRecojo']
+    ordenes_string = " / ".join([f"{row['oc']['numero_oc']}({row['numeroRecojo']})" for row in ordenes_recojo])
+    textos = [
+        f"N° DUA: {data['dataForm']['dua']}",
+        f"Fec. Num.: {data['procesado']['fecha_numeracion']}",
+        f"Factura N°: {data['dataForm']['numFactura']}",
+        f"OC: {ordenes_string}",
+        f"CANT. {data['procesado']['total_sacos_cargados']} sacos",
+        f" {data['dataForm']['pesoNetoCrt']} kg"
+    ]
+    # Fuente y tamaño
+    font_name = "Helvetica"
+    font_size = 8
+    c.setFont(font_name, font_size)
+    # Espacio entre columnas
+    margin = 30
+    # Posición inicial en Y (mantener fija)
+    current_y -= 20
+    y_position = current_y
+    # Posición inicial en X
+    x_position = 40
+    # Dibujar todos los textos en una línea tomando en cuenta su tamaño para darle cierto espaciado
+    for texto in textos:
+        # Calcular el ancho de cada texto
+        text_width = c.stringWidth(texto, font_name, font_size)
+
+        # Dibujar el texto
+        c.drawString(x_position, y_position, texto)
+
+        # Actualizar la posición X para el siguiente texto
+        x_position += text_width + margin
+
+        # Si el texto excede el tamaño de la página en el eje X, detener la creación del contenido
+        if x_position > width:
+            break
+
+    # QUINTA LINEA DONDE INICIA LA TABLA:
+    current_y -= 20
+    # Datos iniciales de la tabla #1 (Titulos y subtitulos)
+    data_table = [
+        # Línea de títulos
+        ['FEC. INGRE.', 'EMPRESA DE TRANSP.', 'CARGA', '', '', '', 'DESCARGA', '', '', '', 'DESCUENTOS', '', '', '',
+         ''],
+        ['', '', 'N°', 'Placa S.', 'Sacos C.', 'Peso S.', 'Placa L.', 'Sacos D.', 'Peso L.', 'Merma', 'S. Falt.',
+         'S. Rotos', 'S. Humed.', 'S. Mojad.', 'Estibaje'],
+    ]
+    styles = getSampleStyleSheet()
+    parrafo = Paragraph(f"<para align=center spaceb=3><b>{data['dataForm']['transportista']}</b></para>",
+                        styles["BodyText"])
+    for i, row in enumerate(data['dataTable']):
+        if i == 0:  # Primera fila (datos especiales)
+            data_table.append([
+                f"{data['procesado']['fecha_numeracion']}",
+                parrafo,
+                str(row['numero']),
+                row['placa'],
+                str(row['sacosCargados']),
+                str(row['pesoSalida']),
+                row['placaLlegada'],
+                str(row['sacosDescargados']),
+                str(row['pesoLlegada']),
+                str(row['merma']),
+                str(row['sacosFaltantes']),
+                str(row['sacosRotos']),
+                str(row['sacosHumedos']),
+                str(row['sacosMojados']),
+                str(row['pagoEstiba']),
+            ])
+        else:  # Para el resto de las filas
+            data_table.append([
+                "",  # Cadena vacía
+                "",  # Cadena vacía
+                str(row['numero']),
+                row['placa'],
+                str(row['sacosCargados']),
+                str(row['pesoSalida']),
+                row['placaLlegada'],
+                str(row['sacosDescargados']),
+                str(row['pesoLlegada']),
+                str(row['merma']),
+                str(row['sacosFaltantes']),
+                str(row['sacosRotos']),
+                str(row['sacosHumedos']),
+                str(row['sacosMojados']),
+                str(row['pagoEstiba']),
+            ])
+    # Agregamos fila de totales
+    data_table.append(
+        ['', f"Flete x TM: $ {data['dataForm']['fletePactado']:.2f}", f"{data['procesado']['len_tabla']}", 'TOTAL',
+         f"{data['procesado']['total_sacos_cargados']}", f"{data['procesado']['suma_peso_salida']}", 'TOTAL',
+         f"{data['procesado']['total_sacos_descargados']}", f"{data['procesado']['suma_peso_llegada']}",
+         f"{data['procesado']['merma_total']}", f"{data['procesado']['total_sacos_faltantes']}",
+         f"{data['procesado']['total_sacos_rotos']}", f"{data['procesado']['total_sacos_humedos']}",
+         f"{data['procesado']['total_sacos_mojados']}"])
+    # Ancho de columnas
+    col_widths = [60, 110, 20, 60, 40, 60, 60, 60, 40, 60, 30, 30, 30, 30, 70]
+    # Crear la tabla
+    table = Table(data_table, colWidths=col_widths, rowHeights=15)
+    color_rosa = Color(red=250 / 255, green=210 / 255, blue=202 / 255)
+    color_celeste = Color(red=176 / 255, green=225 / 255, blue=250 / 255)
+    numero_filas = len(data_table)
+    # Estilos para la tabla
+    table_style = TableStyle([
+        ('SPAN', (0, 0), (0, 1)),  # Fusionar "FEC. INGRE."
+        ('SPAN', (1, 0), (1, 1)),  # Fusionar "EMPRESA DE TRANSP."
+        ('SPAN', (2, 0), (5, 0)),  # Fusionar "CARGA"
+        ('SPAN', (6, 0), (9, 0)),  # Fusionar "DESCARGA"
+        ('SPAN', (10, 0), (14, 0)),  # Fusionar "DESCUENTOS"
+        ('SPAN', (0, 2), (0, numero_filas - 1)),  # Fusionar "fecha"
+        ('SPAN', (1, 2), (1, numero_filas - 2)),  # Fusionar "nombre empresa transporte"
+        ('FONTSIZE', (0, 0), (-1, -1), 6),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),  # Centrar todo
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),  # Centrar verticalmente
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),  # Añadir cuadrícula
+        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),  # Fondo gris para los títulos
+        ('BACKGROUND', (0, 1), (-1, 1), colors.lightgrey),  # Fondo gris claro para subtítulos
+        ('BACKGROUND', (2, 0), (5, numero_filas), colors.yellowgreen),  # Color "CARGA"
+        ('BACKGROUND', (6, 0), (9, numero_filas), color_celeste),  # Color "DESCARGA"
+        ('BACKGROUND', (10, 0), (14, numero_filas), color_rosa),  # Fusionar "DESCUENTOS"
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),  # Negrita en títulos
+        ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),  # Negrita en subtítulos
+        # ('FONTSIZE', (15, 0), (15, numero_filas - 1), 5),
+    ])
+    # Aplicar estilos a la tabla
+    table.setStyle(table_style)
+    # Calcular la altura total de la tabla
+    table_height = len(data_table) * 15  # 20 es la altura de cada fila
+    # Calcular la posición de la tabla en la página
+    table.wrapOn(c, width, height)
+    table.drawOn(c, 40, current_y - table_height)  # Ajustar la posición dependiendo de la cantidad de filas
+
+    current_y = current_y - table_height - 20
+
+    # Data para la tabla #2 (Detalles de pesos)
+    second_data_table = [
+        ["Faltante peso Sta. Cruz - Desaguadero:", f"{data['procesado']['diferencia_de_peso']:.2f} Kg."],
+        ["Merma permitida:", f"{data['dataExtra']['mermaPermitida']:.2f} Kg."],
+        ["Desc. diferencia de peso:", f"{data['procesado']['diferencia_peso_por_cobrar']:.2f} Kg."],
+        ["Desc. sacos falantes:", f"{data['procesado']['descuento_peso_sacos_faltantes']:.2f} Kg."]
+    ]
+    second_col_widths = [110, 50]
+    second_table = Table(second_data_table, colWidths=second_col_widths, rowHeights=14)
+    second_table_style = TableStyle([
+        ('FONTSIZE', (0, 0), (-1, -1), 6),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),  # Centrar
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),  # Centrar verticalmente
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),  # Añadir cuadrícula
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),  # Alinear la segunda columna a la derecha
+    ])
+    second_table.setStyle(second_table_style)
+    second_table_height = len(second_data_table) * 14
+    second_table.wrapOn(c, width, height)
+    second_table.drawOn(c, 40, current_y - second_table_height)
+
+    # Data para la tabla #3 (Resumen de descuentos)
+    third_data_table = [
+        ["FLETE", f"$ {data["procesado"]["flete_base"]:.2f}"],
+        ["Dscto. por dif. de peso", f"$ {data["procesado"]["descuento_por_diferencia_peso"]:.2f}"],
+        ["Dscto. por sacos faltantes", f"$ {data["procesado"]["descuento_sacos_faltantes"]:.2f}"],
+        ["Dscto. por sacos rotos", f"$ {data["procesado"]["descuento_sacos_rotos"]:.2f}"],
+        ["Dscto. por sacos humedos", f"$ {data["procesado"]["descuento_sacos_humedos"]:.2f}"],
+        ["Dscto. por sacos mojados", f"$ {data["procesado"]["descuento_sacos_mojados"]:.2f}"],
+        ["FLETE TOTAL", f"$ {data["procesado"]["total_luego_dsctos_sacos"]:.2f}"],
+    ]
+    # posicion en x para la tercera tabla:
+    x_position_for_third_table = 260
+    third_col_widths = [110, 40]
+    third_table = Table(third_data_table, colWidths=third_col_widths, rowHeights=14)
+    third_table_style = TableStyle([
+        ('FONTSIZE', (0, 0), (-1, -1), 6),  # Tamaño de fuente
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),  # Alinear toda la tabla a la izquierda
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),  # Centrar verticalmente
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),  # Añadir cuadrícula
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),  # Alinear la segunda columna a la derecha
+    ])
+    third_table.setStyle(third_table_style)
+    third_table_height = len(third_data_table) * 14
+    third_table.wrapOn(c, width, height)
+    third_table.drawOn(c, x_position_for_third_table, current_y - third_table_height)
+
+    # PARA VALIDACION DEL VALOR CRT
+    peso_total_toneladas = data['dataForm']['pesoNetoCrt'] / 1000
+    flete_pactado = data["dataForm"]["fletePactado"]
+    monto_flete = round((peso_total_toneladas * flete_pactado), 2)
+    flete_base = data["procesado"]["flete_base"]
+    estado_crt = ""
+    if (flete_base <= monto_flete):
+        estado_crt = "NO SOBREPASA VALOR CRT"
+    else:
+        estado_crt = "SOBREPASA VALOR CRT"
+    c.setFont("Helvetica-Bold", 7)
+    c.drawString(x_position_for_third_table + 150 + 10, current_y - 8, estado_crt)
+
+    # Primera LLave para descuento sacos RMH
+    c.setLineWidth(0.5)
+    first_x_position_for_key = x_position_for_third_table + 150 + 10
+    first_key_y_position = current_y - (14 * 3)
+    last_key_y_position = first_key_y_position - (14 * 3)
+    middle_of_key = (first_key_y_position + last_key_y_position) / 2
+    inclinacion = 2
+    c.line(first_x_position_for_key, first_key_y_position - inclinacion, first_x_position_for_key,
+           last_key_y_position + inclinacion)
+    c.line(first_x_position_for_key, first_key_y_position - inclinacion, first_x_position_for_key - inclinacion,
+           first_key_y_position)
+    c.line(first_x_position_for_key - inclinacion, last_key_y_position, first_x_position_for_key,
+           last_key_y_position + inclinacion)
+    c.line(first_x_position_for_key, middle_of_key, first_x_position_for_key + inclinacion, middle_of_key)
+    c.setFont("Helvetica-Bold", 7)
+    c.drawString(first_x_position_for_key + inclinacion + 4, middle_of_key,
+                 f"$ {data['procesado']['total_descuento_solo_sacos']:.2f}")
+
+    # Segunda llave para descuento de sacos RMH
+    c.setLineWidth(0.5)
+
+    # Coordenadas para dibujar segunda la llave
+    key_start_x = first_x_position_for_key + inclinacion + 4 + 40
+    key_start_y = current_y - 14
+    key_end_y = key_start_y - (14 * 5)
+    key_middle_y = (key_start_y + key_end_y) / 2
+    key_inclination = 2
+
+    # Dibujar la llave
+    c.line(key_start_x, key_start_y - key_inclination, key_start_x, key_end_y + key_inclination)
+    c.line(key_start_x, key_start_y - key_inclination, key_start_x - key_inclination, key_start_y)
+    c.line(key_start_x - key_inclination, key_end_y, key_start_x, key_end_y + key_inclination)
+    c.line(key_start_x, key_middle_y, key_start_x + key_inclination, key_middle_y)
+
+    # Texto del descuento
+    c.setFont("Helvetica-Bold", 7)
+    c.drawString(key_start_x + key_inclination + 4, key_middle_y,
+                 f"$ {data['procesado']['aux_descuento']:.2f}")
+
+    # Lista de placas y estado de estiba:
+    y_position_for_list = current_y - third_table_height - 10
+    c.setFont("Helvetica", 6)
+    for item in data["procesado"]["pago_estiba_list"]:
+        # Crear texto en una línea
+        c.drawString(x_position_for_third_table, y_position_for_list,
+                     f"{item['placa']} {item['detalle']}")  # Placa y detalle
+        c.drawString(x_position_for_third_table + 130, y_position_for_list,
+                     f"$ {item['monto_descuento']:.2f}")  # Monto alineado a la derecha
+        y_position_for_list -= 10  # Reducir la posición vertical para la próxima línea
+
+    for item in data["procesado"]["otros_gastos"]:
+        c.drawString(x_position_for_third_table, y_position_for_list, f"{item['descripcion']}")
+        c.drawString(x_position_for_third_table + 130, y_position_for_list, f"$ {item['monto']:.2f}")
+        y_position_for_list -= 10
+
+    # Coordenadas para dibujar la tercera llave
+    tirth_key_start_x = first_x_position_for_key
+    tirth_key_start_y = current_y - third_table_height - 5
+    tirth_key_end_y = y_position_for_list + 10
+    tirth_key_middle_y = (tirth_key_start_y + tirth_key_end_y) / 2
+    tirth_key_inclination = 2
+    # Dibujar la tercera llave
+    c.line(tirth_key_start_x, tirth_key_start_y - tirth_key_inclination, tirth_key_start_x,
+           tirth_key_end_y + tirth_key_inclination)
+    c.line(tirth_key_start_x, tirth_key_start_y - tirth_key_inclination, tirth_key_start_x - tirth_key_inclination,
+           tirth_key_start_y)
+    c.line(tirth_key_start_x - tirth_key_inclination, tirth_key_end_y, tirth_key_start_x,
+           tirth_key_end_y + tirth_key_inclination)
+    c.line(tirth_key_start_x, tirth_key_middle_y, tirth_key_start_x + tirth_key_inclination, tirth_key_middle_y)
+    # Texto del descuento
+    total_decuento = data['procesado']['total_descuento_estiba'] + data['procesado']['total_otros_gastos']
+    c.setFont("Helvetica-Bold", 7)
+    c.drawString(tirth_key_start_x + tirth_key_inclination + 4, tirth_key_middle_y - 2,
+                 f"$ {total_decuento:.2f}")
+
+    # Escribir linea de neto a pagar
+    table_total_data = [
+        ["TOTAL A PAGAR:", f"${data['procesado']['total_a_pagar']:.2f}"]
+    ]
+    # Crear la tabla
+    table_total = Table(table_total_data, colWidths=[110, 40])  # Anchos de columnas
+    # Aplicar estilo a la tabla
+    table_total.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.orange),  # Fondo naranja
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),  # Texto en color negro
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),  # Alineación izquierda primera columna
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),  # Fuente en negrita
+        ('FONTSIZE', (0, 0), (-1, -1), 8),  # Tamaño de la fuente
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),  # Alineación derecha segunda columna
+    ]))
+    altura_tabla_total = len(table_total_data) * 14
+    table_total.wrapOn(c, width, height)
+    table_total.drawOn(c, x_position_for_third_table, y_position_for_list - altura_tabla_total - 20)
+
+    # Data para la tabla #4 (resumen de descuentos)
+    new_x_position = 260 + 150 + 150
+    fourth_data_table = [
+        ["FLETE", f"$ {data["procesado"]["flete_base"]:.2f}"],
+        ["Dscto.", f"$ {data["procesado"]["total_dsct"]:.2f}"],
+        ["Neto.", f"$ {data["procesado"]["total_a_pagar"]:.2f}"],
+    ]
+    fourth_col_widths = [30, 50]
+    fourth_table = Table(fourth_data_table, colWidths=fourth_col_widths, rowHeights=14)
+    fourth_table_style = TableStyle([
+        ('FONTSIZE', (0, 0), (-1, -1), 6),  # Tamaño de fuente
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),  # Alinear toda la tabla a la izquierda
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),  # Centrar verticalmente
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),  # Añadir cuadrícula
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),  # Alinear la segunda columna a la derecha
+    ])
+    fourth_table.setStyle(fourth_table_style)
+    fourth_table_height = len(fourth_data_table) * 14
+    fourth_table.wrapOn(c, width, height)
+    fourth_table.drawOn(c, new_x_position, current_y - fourth_table_height - (14 * 3))
+    c.setFont("Helvetica-Bold", 7)
+    c.drawString(new_x_position, current_y - fourth_table_height + 5, "RESUMEN")
+
+    # Data para la tabla #5 (determinacion de costos)
+    second_new_x_position = new_x_position + 120
+    c.setFont("Helvetica-Bold", 6)
+    c.drawString(second_new_x_position, current_y + 5, "Determinacion de costo x Kg.")
+    fifth_data_table = [
+        ["C.P", f"{data["procesado"]["precio_por_tonelada"]:.2f}"],
+        ["F.B", f"$ {data["dataForm"]["fletePactado"]:.2f}"],
+        ["G.N", f"{data["dataExtra"]["gastosNacionalizacion"]}"],
+        ["MF CIA", f"{data["dataExtra"]["margenFinanciero"]}"],
+        ["IGV 18%", f"{data["procesado"]["igv"]}"],
+        ["PRECIO DES", f"{data["procesado"]["precio_bruto_final"]}"],
+        ["COSTO TM", f"{data["procesado"]["precio_por_tonelada_final"]}"],
+        ["COSTO Kg", f"{data["procesado"]["precio_por_kg_final"]}"],
+    ]
+    fifth_col_widths = [50, 40]
+    fifth_table = Table(fifth_data_table, colWidths=fifth_col_widths, rowHeights=14)
+    fifth_table_style = TableStyle([
+        ('FONTSIZE', (0, 0), (-1, -1), 6),  # Tamaño de fuente
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),  # Alinear toda la tabla a la izquierda
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),  # Centrar verticalmente
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),  # Añadir cuadrícula
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),  # Alinear la segunda columna a la derecha
+    ])
+    fifth_table.setStyle(fifth_table_style)
+    fifth_table_height = len(fifth_data_table) * 14
+    fifth_table.wrapOn(c, width, height)
+    fifth_table.drawOn(c, second_new_x_position, current_y - fifth_table_height)
+
+    # SALTO DE LINEA PARA ESPACIO DE DESCUENTOS
+    current_y = current_y - second_table_height - 20
+
+    x_start = 40  # Eje X constante
+    line_height = 10  # Interlineado
+    # Escribir título
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(x_start, current_y, "Descuentos:")
+    current_y -= line_height + 5  # Reducir Y para el siguiente contenido
+    # Cambiar la fuente para los detalles
+    c.setFont("Helvetica", 7)
+    # Condicionales y datos
+    if data["procesado"]["descuento_por_diferencia_peso"] > 0:
+        c.drawString(
+            x_start,
+            current_y,
+            f"B/V 004-:        dscto. x dif. peso $ {data['procesado']['descuento_por_diferencia_peso']:.2f}"
+        )
+        current_y -= line_height
+
+    if data["procesado"]["descuento_sacos_faltantes"] > 0:
+        c.drawString(
+            x_start,
+            current_y,
+            f"B/V 004-:        dscto. x sacos falt. $ {data['procesado']['descuento_sacos_faltantes']:.2f}"
+        )
+        current_y -= line_height
+
+    if data["procesado"]["total_descuento_solo_sacos"] > 0:
+        c.drawString(
+            x_start,
+            current_y,
+            f"B/V 004-:        dscto. x sacos R,H,M. $ {data['procesado']['total_descuento_solo_sacos']:.2f}"
+        )
+        current_y -= line_height
+
+    if data["procesado"]["total_descuento_estiba"] > 0:
+        c.drawString(
+            x_start,
+            current_y,
+            f"B/V 004-:        dscto. x estibaje $ {data['procesado']['total_descuento_estiba']:.2f}"
+        )
+        current_y -= line_height
+
+    # Total
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(
+        x_start,
+        current_y - 5,
+        f"TOTAL A DESCONTAR:   $ {data['procesado']['tota_dsct_sin_gastos_otros']:.2f}"
+    )
+
+    # Guardar el PDF en el buffer
+    c.showPage()
+    c.save()
+
+    buffer.seek(0)  # Volver al inicio del buffer
+    return buffer.getvalue()  # Devolver el PDF en binario
+
+def descargar_pdf(request, despacho_id):
+    despacho = get_object_or_404(Despacho, id=despacho_id)
+
+    if despacho.archivo_pdf:
+        response = HttpResponse(despacho.archivo_pdf, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="reporte_despacho_{despacho.id}.pdf"'
+        return response
+    else:
+        return HttpResponse("No hay PDF disponible para este despacho", status=404)
+
+
+
+class ProcesarArchivoView(APIView):
+    parser_classes = (MultiPartParser, FormParser)
+
+    def post(self, request, *args, **kwargs):
+        archivo = request.FILES.get('archivo')
+        numero_dam = request.data.get('numero_dam')  # Recibir N° de DAM del frontend
+
+        if not archivo:
+            return Response({'error': 'No se ha enviado ningún archivo'}, status=400)
+
+        # Guardar el archivo temporalmente
+        ruta_archivo = os.path.join(settings.MEDIA_ROOT, archivo.name)
+        with open(ruta_archivo, 'wb+') as destino:
+            for chunk in archivo.chunks():
+                destino.write(chunk)
+
+        # Procesar archivo RAR
+        try:
+            with rarfile.RarFile(ruta_archivo) as rf:
+                file_list = rf.namelist()
+
+            # Obtener solo carpetas
+            folder_list = sorted(set(os.path.dirname(f) for f in file_list if f.endswith("/")))
+            num_folders = len(folder_list)
+
+            # Si el N° de DAM está presente, renombrar la carpeta principal
+            if numero_dam:
+                nueva_carpeta = f"DAM_{numero_dam}"
+                destino_final = os.path.join(settings.MEDIA_ROOT, nueva_carpeta)
+
+                if not os.path.exists(destino_final):
+                    os.makedirs(destino_final)
+
+                os.rename(ruta_archivo, os.path.join(destino_final, archivo.name))
+                return Response({
+                    'mensaje': 'Archivo procesado y renombrado correctamente',
+                    'cantidad_carpetas': num_folders,
+                    'carpetas': folder_list,
+                    'ruta_guardada': destino_final
+                })
+
+            return Response({
+                'mensaje': 'Archivo procesado correctamente',
+                'cantidad_carpetas': num_folders,
+                'carpetas': folder_list
+            })
+
+        except rarfile.BadRarFile:
+            return Response({'error': 'El archivo no es un RAR válido'}, status=400)
+
+class GuardarArchivoView(APIView):
+    def post(self, request, *args, **kwargs):
+        archivos = request.data.get("archivos", [])  # Lista de archivos renombrados
+
+        if not archivos:
+            return Response({'error': 'No se han proporcionado archivos para guardar'}, status=400)
+
+        base_path = settings.MEDIA_ROOT  # Directorio base donde se guardarán los archivos
+
+        for archivo in archivos:
+            original = archivo.get("original")
+            nuevo = archivo.get("nuevo")
+
+            if not original or not nuevo:
+                continue
+
+            ruta_original = os.path.join(base_path, original)
+            ruta_nueva = os.path.join(base_path, nuevo)
+
+            if os.path.exists(ruta_original):
+                os.rename(ruta_original, ruta_nueva)
+
+        return Response({'mensaje': 'Archivos guardados correctamente'})
 
