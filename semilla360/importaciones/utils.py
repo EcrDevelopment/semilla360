@@ -2,7 +2,7 @@ from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
 from xhtml2pdf import pisa
 import os
-import json
+
 
 def renderizar_template(template_path, data):
     """
@@ -151,11 +151,12 @@ def procesar_data_reporte(data):
     empresa = ''
 
     fecha_numeracion=datetime.strptime(dataForm['fechaNumeracion'], '%Y-%m-%dT%H:%M:%S.%fZ').strftime('%d/%m/%Y')
+
     if dataForm["empresa"] == "bd_trading_starsoft":
-        empresa = "TRADING SEMILLA SAC"
+            empresa = "TRADING SEMILLA SAC"
     elif dataForm["empresa"] == "bd_semilla_starsoft":
             empresa = "LA SEMILLA SEMILLA DE ORO SAC"
-    elif dataForm["empresa"] == "bd_maximilian_starsoft":
+    elif dataForm["empresa"] == "bd_maxi_starsoft":
             empresa = "MAXIMILIAN INVERSIONES SA"
 
     # Recorrer los datos de la tabla
@@ -442,7 +443,7 @@ def procesar_data_bd_reporte(data):
         empresa = "TRADING SEMILLA SAC"
     elif dataForm["empresa"] == "bd_semilla_starsoft":
         empresa = "LA SEMILLA SEMILLA DE ORO SAC"
-    elif dataForm["empresa"] == "bd_maximilian_starsoft":
+    elif dataForm["empresa"] == "bd_maxi_starsoft":
         empresa = "MAXIMILIAN INVERSIONES SA"
 
 

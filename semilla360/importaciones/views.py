@@ -8,6 +8,9 @@ from django.db.models import Q
 from django.utils.timezone import make_aware
 from reportlab.lib.styles import getSampleStyleSheet
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from rest_framework import generics, status
+from rest_framework.permissions import IsAuthenticated
+
 from .models import (OrdenCompraStarsoft, GastosExtra,Proveedor,OrdenCompraDespacho, Empresa, OrdenCompra, Producto, ProveedorTransporte, Transportista,
     Despacho, DetalleDespacho, ConfiguracionDespacho)
 from .forms import BaseDatosForm
@@ -21,6 +24,8 @@ from PIL import Image
 import pdfplumber
 import json
 from django.shortcuts import get_object_or_404
+
+from .serializers import DespachoSerializer
 from .utils import renderizar_template, convertir_html_a_pdf, procesar_data_reporte, procesar_data_bd_reporte
 import os
 from reportlab.lib.pagesizes import landscape, A4
@@ -1982,6 +1987,38 @@ def descargar_pdf(request, despacho_id):
     else:
         return HttpResponse("No hay PDF disponible para este despacho", status=404)
 
+class DespachoDeleteView(generics.DestroyAPIView):
+    queryset = Despacho.objects.all()
+    serializer_class = DespachoSerializer
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        try:
+            despacho = get_object_or_404(Despacho, pk=pk)
+
+            # Serializamos los datos antes de eliminar
+            data_despacho = DespachoSerializer(despacho).data
+
+            # Eliminamos el despacho
+            despacho.delete()
+
+            return JsonResponse(
+                {
+                    "success": True,
+                    "message": f"Despacho {pk} eliminado correctamente",
+                    "deleted_data": data_despacho
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class ProcesarArchivoView(APIView):

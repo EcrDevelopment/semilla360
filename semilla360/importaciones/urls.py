@@ -4,7 +4,7 @@ from pandas.conftest import names
 from rest_framework.routers import DefaultRouter
 from .views import listar_importaciones, registrar_despacho, buscar_orden_importacion, upload_file, upload_file_excel, \
     buscar_proveedor, generar_reporte_base, generar_reporte_detallado, listar_estiba, listar_despachos, \
-    listar_data_despacho, descargar_pdf
+    listar_data_despacho, descargar_pdf, DespachoDeleteView
 from .views import ProcesarArchivoView,GuardarArchivoView
 from graphene_django.views import GraphQLView
 from .schema import schema
@@ -28,6 +28,7 @@ urlpatterns = [
     path('generar-reporte-estiba/',listar_estiba,name='generar_reporte_estiba'),
     path('procesar_archivo/', ProcesarArchivoView.as_view(), name='procesar_archivo'),
     path('renombrar_carpetas/', GuardarArchivoView.as_view(), name='renombrar_carpetas'),
+    path('despachos/<int:pk>/eliminar/', DespachoDeleteView.as_view(), name='eliminar_despacho'),
 ]
 
 
